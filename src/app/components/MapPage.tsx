@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router";
-import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 import {
   Zap,
   Star,
@@ -12,7 +12,7 @@ import { useApp } from "../context/AppContext";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import type { Charger } from "../data/mock-data";
 
-// Map center for Bangalore
+// Map center for Bangalore (using OpenStreetMap with Leaflet)
 const MAP_CENTER: [number, number] = [12.96, 77.63];
 
 // Custom marker icon for chargers
@@ -94,18 +94,15 @@ const userLocationIcon = L.divIcon({
   iconAnchor: [8, 8],
 });
 
-function RecenterMap({ center }: { center: [number, number] }) {
-  const map = useMap();
-  map.setView(center, map.getZoom());
-  return null;
-}
-
 export function MapPage() {
   const { chargers } = useApp();
   const navigate = useNavigate();
   const [selectedCharger, setSelectedCharger] = useState<Charger | null>(null);
   const [filterConnector, setFilterConnector] = useState("All");
   const [showOnlyAvailable, setShowOnlyAvailable] = useState(false);
+  const mapRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<L.Map | null>(null);
+  const markersRef = useRef<L.Marker[]>([]);
 
   const filtered = chargers.filter((c) => {
     const matchConnector =
@@ -113,6 +110,58 @@ export function MapPage() {
     const matchAvailable = !showOnlyAvailable || c.available;
     return matchConnector && matchAvailable;
   });
+
+  // Initialize map
+  useEffect(() => {
+    if (!mapRef.current || mapInstanceRef.current) return;
+
+    const map = L.map(mapRef.current, {
+      center: MAP_CENTER,
+      zoom: 13,
+      zoomControl: false,
+    });
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    }).addTo(map);
+
+    // Add user location marker
+    L.marker(MAP_CENTER, { icon: userLocationIcon }).addTo(map);
+
+    mapInstanceRef.current = map;
+
+    return () => {
+      map.remove();
+      mapInstanceRef.current = null;
+    };
+  }, []);
+
+  // Update markers when filtered chargers change
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+
+    // Remove old markers
+    markersRef.current.forEach((marker) => marker.remove());
+    markersRef.current = [];
+
+    // Add new markers
+    filtered.forEach((charger) => {
+      const isSelected = selectedCharger?.id === charger.id;
+      const marker = L.marker([charger.lat, charger.lng], {
+        icon: createChargerIcon(
+          charger.pricePerHour,
+          charger.available,
+          isSelected
+        ),
+      }).addTo(mapInstanceRef.current!);
+
+      marker.on("click", () => {
+        setSelectedCharger(charger);
+      });
+
+      markersRef.current.push(marker);
+    });
+  }, [filtered, selectedCharger]);
 
   return (
     <div className="relative h-full flex flex-col">
@@ -147,42 +196,7 @@ export function MapPage() {
       </div>
 
       {/* Map Container */}
-      <div className="flex-1 relative">
-        <MapContainer
-          center={MAP_CENTER}
-          zoom={13}
-          scrollWheelZoom={true}
-          className="h-full w-full"
-          zoomControl={false}
-        >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-
-          {/* User location marker */}
-          <Marker position={MAP_CENTER} icon={userLocationIcon} />
-
-          {/* Charger markers */}
-          {filtered.map((charger) => {
-            const isSelected = selectedCharger?.id === charger.id;
-            return (
-              <Marker
-                key={charger.id}
-                position={[charger.lat, charger.lng]}
-                icon={createChargerIcon(
-                  charger.pricePerHour,
-                  charger.available,
-                  isSelected
-                )}
-                eventHandlers={{
-                  click: () => setSelectedCharger(charger),
-                }}
-              />
-            );
-          })}
-        </MapContainer>
-      </div>
+      <div ref={mapRef} className="flex-1 relative" />
 
       {/* Selected Charger Card */}
       {selectedCharger && (
