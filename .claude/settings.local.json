@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc -l /c/OJT-SEM2-p/Plugpointf/src/app/components/*.tsx)"
+    ]
+  }
+}
