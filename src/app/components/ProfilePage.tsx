@@ -20,7 +20,7 @@ import { useApp } from "../context/AppContext";
 
 export function ProfilePage() {
   const navigate = useNavigate();
-  const { user, isAuthenticated, logout, bookings, chargers } = useApp();
+  const { user, isAuthenticated, logout, bookings, chargers, reviews } = useApp();
 
   if (!isAuthenticated || !user) {
     return (
@@ -48,30 +48,30 @@ export function ProfilePage() {
     .filter((b) => b.status === "completed")
     .reduce((sum, b) => sum + b.totalCost, 0);
 
+  const upcomingBookings = bookings.filter((b) => b.status === "upcoming").length;
+  const userReviews = reviews.filter((r) => r.userId === user.id).length;
+  
+  const hostBookings = bookings.filter((b) => 
+    userChargers.some((c) => c.id === b.chargerId) && b.status === "completed"
+  );
+  const hostEarnings = hostBookings.reduce((sum, b) => sum + b.totalCost, 0);
+  const isSuperhost = user.rating >= 4.5 && userChargers.length > 0;
+
   const menuSections = [
     {
       title: "Account",
       items: [
-        {
-          icon: CreditCard,
-          label: "Payment Methods",
-          detail: "Visa **** 4242",
-        },
-        { icon: Bell, label: "Notifications", detail: "On" },
-        { icon: Heart, label: "Saved Chargers", detail: "3" },
-        { icon: MessageCircle, label: "Messages", detail: "2 new" },
+        { icon: CreditCard, label: "Wallet Balance", detail: "₹0.00" },
+        { icon: Bell, label: "Active Bookings", detail: upcomingBookings > 0 ? `${upcomingBookings} upcoming` : "None" },
+        { icon: Heart, label: "My Reviews", detail: `${userReviews} reviews` },
       ],
     },
     {
       title: "Host",
       items: [
-        {
-          icon: Zap,
-          label: "My Chargers",
-          detail: `${userChargers.length} listed`,
-        },
-        { icon: CalendarDays, label: "Host Earnings", detail: "₹18,500" },
-        { icon: Award, label: "Host Level", detail: "Superhost" },
+        { icon: Zap, label: "My Chargers", detail: `${userChargers.length} listed` },
+        { icon: CalendarDays, label: "Host Earnings", detail: `₹${hostEarnings.toLocaleString()}` },
+        { icon: Award, label: "Host Level", detail: isSuperhost ? "Superhost" : "Standard Host" },
       ],
     },
     {
