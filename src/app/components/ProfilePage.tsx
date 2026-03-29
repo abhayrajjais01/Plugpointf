@@ -17,6 +17,7 @@ import {
   Award,
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
+import { toast } from "sonner";
 
 export function ProfilePage() {
   const navigate = useNavigate();
@@ -61,24 +62,24 @@ export function ProfilePage() {
     {
       title: "Account",
       items: [
-        { icon: CreditCard, label: "Wallet Balance", detail: "₹0.00" },
-        { icon: Bell, label: "Active Bookings", detail: upcomingBookings > 0 ? `${upcomingBookings} upcoming` : "None" },
-        { icon: Heart, label: "My Reviews", detail: `${userReviews} reviews` },
+        { icon: CreditCard, label: "Wallet Balance", detail: "₹0.00", onClick: () => toast.info("Wallet & Payments integration coming soon!") },
+        { icon: Bell, label: "Active Bookings", detail: upcomingBookings > 0 ? `${upcomingBookings} upcoming` : "None", onClick: () => navigate("/bookings") },
+        { icon: Heart, label: "My Reviews", detail: `${userReviews} reviews`, onClick: () => toast.info("Reviews management coming soon!") },
       ],
     },
     {
       title: "Host",
       items: [
-        { icon: Zap, label: "My Chargers", detail: `${userChargers.length} listed` },
-        { icon: CalendarDays, label: "Host Earnings", detail: `₹${hostEarnings.toLocaleString()}` },
-        { icon: Award, label: "Host Level", detail: isSuperhost ? "Superhost" : "Standard Host" },
+        { icon: Zap, label: "My Chargers", detail: `${userChargers.length} listed`, onClick: () => navigate("/list-charger") },
+        { icon: CalendarDays, label: "Host Earnings", detail: `₹${hostEarnings.toLocaleString()}`, onClick: () => toast.info("Detailed earnings dashboard coming soon!") },
+        { icon: Award, label: "Host Level", detail: isSuperhost ? "Superhost" : "Standard Host", onClick: () => toast.info("Host levels are assigned automatically based on ratings.") },
       ],
     },
     {
       title: "Support",
       items: [
-        { icon: HelpCircle, label: "Help Center", detail: "" },
-        { icon: Settings, label: "Settings", detail: "" },
+        { icon: HelpCircle, label: "Help Center", detail: "", onClick: () => toast.info("Help Center coming soon!") },
+        { icon: Settings, label: "Settings", detail: "", onClick: () => toast.info("App Settings coming soon!") },
       ],
     },
   ];
@@ -161,6 +162,7 @@ export function ProfilePage() {
               return (
                 <button
                   key={item.label}
+                  onClick={item.onClick}
                   className={`flex items-center gap-3 w-full px-3 py-3 text-left hover:bg-muted/50 transition-colors ${
                     i < section.items.length - 1
                       ? "border-b border-border"

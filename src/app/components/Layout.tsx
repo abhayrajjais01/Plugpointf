@@ -1,4 +1,5 @@
 import { Outlet, useLocation, useNavigate } from "react-router";
+import { Toaster } from "sonner";
 import {
   MapPin,
   Search,
@@ -24,6 +25,7 @@ export function Layout() {
 
   return (
     <div className="flex flex-col h-screen bg-background">
+      <Toaster position="top-center" />
       {/* Top Header */}
       <header className="sticky top-0 z-50 bg-white border-b border-border px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate("/")}>
