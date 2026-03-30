@@ -104,9 +104,17 @@ export function MapPage() {
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.Marker[]>([]);
 
+  const evModels = [
+    { label: "All", connector: "All" },
+    { label: "Tata Nexon", connector: "CCS" },
+    { label: "MG ZS EV", connector: "CCS" },
+    { label: "Ather 450", connector: "J1772" },
+  ];
+
   const filtered = chargers.filter((c) => {
+    const selectedModel = evModels.find((m) => m.label === filterConnector);
     const matchConnector =
-      filterConnector === "All" || c.connectorType === filterConnector;
+      filterConnector === "All" || c.connectorType === selectedModel?.connector;
     const matchAvailable = !showOnlyAvailable || c.available;
     return matchConnector && matchAvailable;
   });
@@ -167,29 +175,26 @@ export function MapPage() {
     <div className="relative h-full flex flex-col">
       {/* Filter Bar */}
       <div className="absolute top-3 left-3 right-3 z-[1000] flex gap-2 overflow-x-auto no-scrollbar">
-        {["All", "J1772", "CCS", "Tesla"].map((type) => (
+        {evModels.map((model) => (
           <button
-            key={type}
-            onClick={() => setFilterConnector(type === "Tesla" ? "Tesla Wall Connector" : type)}
-            className={`px-3 py-1.5 rounded-full text-[0.75rem] whitespace-nowrap shadow-md transition-colors ${
-              filterConnector === type ||
-              (type === "Tesla" && filterConnector === "Tesla Wall Connector")
+            key={model.label}
+            onClick={() => setFilterConnector(model.label)}
+            className={`px-3 py-1.5 rounded-full text-[0.75rem] whitespace-nowrap shadow-md transition-colors flex-shrink-0 font-medium ${
+              filterConnector === model.label
                 ? "bg-primary text-white"
                 : "bg-white text-foreground border border-border"
             }`}
-            style={{ fontWeight: 500 }}
           >
-            {type}
+            {model.label}
           </button>
         ))}
         <button
           onClick={() => setShowOnlyAvailable(!showOnlyAvailable)}
-          className={`px-3 py-1.5 rounded-full text-[0.75rem] whitespace-nowrap shadow-md transition-colors ${
+          className={`px-3 py-1.5 rounded-full text-[0.75rem] whitespace-nowrap shadow-md transition-colors flex-shrink-0 font-medium ${
             showOnlyAvailable
               ? "bg-emerald-500 text-white"
               : "bg-white text-foreground border border-border"
           }`}
-          style={{ fontWeight: 500 }}
         >
           Available Now
         </button>
@@ -263,8 +268,12 @@ export function MapPage() {
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[999]">
         {!selectedCharger && (
           <div className="bg-white/90 backdrop-blur-sm rounded-full px-4 py-1.5 shadow-md border border-border">
-            <span className="text-[0.75rem] text-muted-foreground">
-              <span style={{ fontWeight: 600 }} className="text-foreground">{filtered.length}</span> chargers in this area
+            <span className="text-[0.75rem] text-muted-foreground flex items-center gap-1.5">
+              <span className="font-semibold text-foreground">{filtered.length}</span>
+              chargers
+              {filterConnector !== "All" && (
+                <span className="text-primary font-medium">· {filterConnector}</span>
+              )}
             </span>
           </div>
         )}
