@@ -92,91 +92,135 @@ export function HomePage() {
           </div>
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className={`p-2.5 rounded-xl border shadow-lg transition-colors ${
+            className={`relative p-2.5 rounded-xl border shadow-lg transition-colors ${
               showFilters
                 ? "bg-primary text-white border-primary"
                 : "bg-white text-muted-foreground border-border"
             }`}
           >
             <SlidersHorizontal className="w-5 h-5" />
+            {(selectedConnector !== "All" || sortBy !== "Nearest" || onlyAvailable) && !showFilters && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-white text-[0.5rem] font-bold rounded-full flex items-center justify-center">
+                {[selectedConnector !== "All", sortBy !== "Nearest", onlyAvailable].filter(Boolean).length}
+              </span>
+            )}
           </button>
         </div>
       </div>
 
       {/* Filters Panel */}
       {showFilters && (
-        <div className="mx-4 mt-3 p-4 bg-white rounded-xl border border-border shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-[0.9375rem]" style={{ fontWeight: 600 }}>Filters</h3>
-            <button
-              onClick={() => {
-                setSelectedConnector("All");
-                setSortBy("Nearest");
-                setOnlyAvailable(false);
-              }}
-              className="text-[0.8125rem] text-primary"
-            >
-              Reset
-            </button>
-          </div>
+        <div className="mx-4 mt-2">
+          <div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
+            {/* Panel header */}
+            <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-border">
+              <div className="flex items-center gap-2">
+                <SlidersHorizontal className="w-4 h-4 text-primary" />
+                <span className="text-[0.9375rem] font-semibold text-foreground">Filters</span>
+                {(selectedConnector !== "All" || sortBy !== "Nearest" || onlyAvailable) && (
+                  <span className="bg-primary text-white text-[0.625rem] font-semibold px-1.5 py-0.5 rounded-full">
+                    {[selectedConnector !== "All", sortBy !== "Nearest", onlyAvailable].filter(Boolean).length}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => {
+                  setSelectedConnector("All");
+                  setSortBy("Nearest");
+                  setOnlyAvailable(false);
+                }}
+                className="text-[0.75rem] text-primary font-medium px-2.5 py-1 rounded-lg hover:bg-primary/10 transition-colors"
+              >
+                Reset all
+              </button>
+            </div>
 
-          <div className="mb-3">
-            <label className="text-[0.75rem] text-muted-foreground mb-1.5 block" style={{ fontWeight: 500 }}>
-              Sort By
-            </label>
-            <div className="flex flex-wrap gap-1.5">
-              {sortOptions.map((opt) => (
+            {/* Sort By */}
+            <div className="px-4 pt-3 pb-3 border-b border-border">
+              <p className="text-[0.6875rem] font-semibold text-muted-foreground uppercase tracking-wider mb-2.5">
+                Sort By
+              </p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {[
+                  { label: "Nearest", icon: MapPin },
+                  { label: "Price: Low", icon: DollarSign },
+                  { label: "Price: High", icon: DollarSign },
+                  { label: "Top Rated", icon: Star },
+                ].map(({ label, icon: Icon }) => (
+                  <button
+                    key={label}
+                    onClick={() => setSortBy(label)}
+                    className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-[0.8125rem] transition-all duration-150 ${
+                      sortBy === label
+                        ? "bg-primary text-white border-primary shadow-sm"
+                        : "bg-muted/50 text-foreground border-border"
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5 flex-shrink-0" />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Connector Type */}
+            <div className="px-4 pt-3 pb-3 border-b border-border">
+              <p className="text-[0.6875rem] font-semibold text-muted-foreground uppercase tracking-wider mb-2.5">
+                Connector Type
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { label: "All", desc: "Any type" },
+                  { label: "J1772", desc: "Level 2" },
+                  { label: "CCS", desc: "DC fast" },
+                  { label: "Tesla Wall Connector", desc: "Tesla" },
+                ].map(({ label, desc }) => (
+                  <button
+                    key={label}
+                    onClick={() => setSelectedConnector(label)}
+                    className={`flex flex-col items-start px-3 py-2 rounded-xl border text-left transition-all duration-150 min-w-[4.5rem] ${
+                      selectedConnector === label
+                        ? "bg-primary text-white border-primary shadow-sm"
+                        : "bg-muted/50 text-foreground border-border"
+                    }`}
+                  >
+                    <span className="text-[0.8125rem] font-medium leading-tight">
+                      {label === "Tesla Wall Connector" ? "Tesla" : label}
+                    </span>
+                    <span
+                      className={`text-[0.625rem] mt-0.5 ${
+                        selectedConnector === label ? "text-white/80" : "text-muted-foreground"
+                      }`}
+                    >
+                      {desc}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Available Now toggle */}
+            <div className="px-4 py-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[0.875rem] font-medium text-foreground">Available now only</p>
+                  <p className="text-[0.75rem] text-muted-foreground mt-0.5">Hide chargers that are currently busy</p>
+                </div>
                 <button
-                  key={opt}
-                  onClick={() => setSortBy(opt)}
-                  className={`px-3 py-1.5 rounded-lg text-[0.75rem] transition-colors ${
-                    sortBy === opt
-                      ? "bg-primary text-white"
-                      : "bg-muted text-muted-foreground"
+                  onClick={() => setOnlyAvailable(!onlyAvailable)}
+                  className={`relative w-11 h-6 rounded-full transition-colors duration-200 flex-shrink-0 ${
+                    onlyAvailable ? "bg-primary" : "bg-switch-background"
                   }`}
                 >
-                  {opt}
+                  <div
+                    className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200 ${
+                      onlyAvailable ? "translate-x-6" : "translate-x-1"
+                    }`}
+                  />
                 </button>
-              ))}
+              </div>
             </div>
           </div>
-
-          <div className="mb-3">
-            <label className="text-[0.75rem] text-muted-foreground mb-1.5 block" style={{ fontWeight: 500 }}>
-              Connector Type
-            </label>
-            <div className="flex flex-wrap gap-1.5">
-              {connectorTypes.map((type) => (
-                <button
-                  key={type}
-                  onClick={() => setSelectedConnector(type)}
-                  className={`px-3 py-1.5 rounded-lg text-[0.75rem] transition-colors ${
-                    selectedConnector === type
-                      ? "bg-primary text-white"
-                      : "bg-muted text-muted-foreground"
-                  }`}
-                >
-                  {type}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <label className="flex items-center gap-2 cursor-pointer">
-            <div
-              className={`w-9 h-5 rounded-full transition-colors relative ${
-                onlyAvailable ? "bg-primary" : "bg-switch-background"
-              }`}
-              onClick={() => setOnlyAvailable(!onlyAvailable)}
-            >
-              <div
-                className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-transform shadow-sm ${
-                  onlyAvailable ? "translate-x-4" : "translate-x-0.5"
-                }`}
-              />
-            </div>
-            <span className="text-[0.8125rem]">Available now only</span>
-          </label>
         </div>
       )}
 
