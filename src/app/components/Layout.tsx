@@ -59,7 +59,7 @@ export function Layout() {
       </main>
 
       {/* Bottom Navigation */}
-      <nav className="sticky bottom-0 z-50 bg-white border-t border-border px-2 pb-[env(safe-area-inset-bottom)]">
+      <nav className="sticky bottom-0 z-[1000] bg-white border-t border-border px-2 pb-[env(safe-area-inset-bottom)]">
         <div className="flex items-center justify-around">
           {navItems.map((item) => {
             const isActive =
@@ -77,7 +77,7 @@ export function Layout() {
                 }`}
               >
                 {isList ? (
-                  <div className="w-10 h-10 -mt-5 bg-primary rounded-full flex items-center justify-center shadow-lg shadow-primary/30">
+                  <div className="relative z-[1001] w-10 h-10 -mt-5 bg-primary rounded-full flex items-center justify-center shadow-lg shadow-primary/20">
                     <Icon className="w-5 h-5 text-white" />
                   </div>
                 ) : (
