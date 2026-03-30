@@ -28,6 +28,20 @@ export function HomePage() {
   const [showFilters, setShowFilters] = useState(false);
   const [sortBy, setSortBy] = useState("Nearest");
   const [onlyAvailable, setOnlyAvailable] = useState(false);
+  const [powerLevel, setPowerLevel] = useState("All");
+  const [minRating, setMinRating] = useState("All");
+  const [priceRange, setPriceRange] = useState("All");
+  const [verifiedOnly, setVerifiedOnly] = useState(false);
+
+  const activeFilterCount = [
+    selectedConnector !== "All",
+    sortBy !== "Nearest",
+    onlyAvailable,
+    powerLevel !== "All",
+    minRating !== "All",
+    priceRange !== "All",
+    verifiedOnly,
+  ].filter(Boolean).length;
 
   const filtered = chargers
     .filter((c) => {
@@ -39,7 +53,31 @@ export function HomePage() {
       const matchesConnector =
         selectedConnector === "All" || c.connectorType === selectedConnector;
       const matchesAvailable = !onlyAvailable || c.available;
-      return matchesSearch && matchesConnector && matchesAvailable;
+      const matchesPower =
+        powerLevel === "All" ||
+        (powerLevel === "Level 1" && c.power <= 2) ||
+        (powerLevel === "Level 2" && c.power > 2 && c.power <= 22) ||
+        (powerLevel === "DC Fast" && c.power > 22);
+      const matchesRating =
+        minRating === "All" ||
+        (minRating === "3+" && c.rating >= 3) ||
+        (minRating === "4+" && c.rating >= 4) ||
+        (minRating === "4.5+" && c.rating >= 4.5);
+      const matchesPrice =
+        priceRange === "All" ||
+        (priceRange === "Budget" && c.pricePerHour <= 80) ||
+        (priceRange === "Mid" && c.pricePerHour > 80 && c.pricePerHour <= 120) ||
+        (priceRange === "Premium" && c.pricePerHour > 120);
+      const matchesVerified = !verifiedOnly || c.verified;
+      return (
+        matchesSearch &&
+        matchesConnector &&
+        matchesAvailable &&
+        matchesPower &&
+        matchesRating &&
+        matchesPrice &&
+        matchesVerified
+      );
     })
     .sort((a, b) => {
       if (sortBy === "Price: Low") return a.pricePerHour - b.pricePerHour;
@@ -92,13 +130,18 @@ export function HomePage() {
           </div>
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className={`p-2.5 rounded-xl border shadow-lg transition-colors ${
+            className={`relative p-2.5 rounded-xl border shadow-lg transition-colors ${
               showFilters
                 ? "bg-primary text-white border-primary"
                 : "bg-white text-muted-foreground border-border"
             }`}
           >
             <SlidersHorizontal className="w-5 h-5" />
+            {activeFilterCount > 0 && !showFilters && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-white text-[0.5rem] font-bold rounded-full flex items-center justify-center">
+                {activeFilterCount}
+              </span>
+            )}
           </button>
         </div>
       </div>
@@ -107,16 +150,27 @@ export function HomePage() {
       {showFilters && (
         <div className="mx-4 mt-3 p-4 bg-white rounded-xl border border-border shadow-sm">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-[0.9375rem]" style={{ fontWeight: 600 }}>Filters</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-[0.9375rem]" style={{ fontWeight: 600 }}>Filters</h3>
+              {activeFilterCount > 0 && (
+                <span className="bg-primary text-white text-[0.625rem] font-semibold px-1.5 py-0.5 rounded-full">
+                  {activeFilterCount}
+                </span>
+              )}
+            </div>
             <button
               onClick={() => {
                 setSelectedConnector("All");
                 setSortBy("Nearest");
                 setOnlyAvailable(false);
+                setPowerLevel("All");
+                setMinRating("All");
+                setPriceRange("All");
+                setVerifiedOnly(false);
               }}
               className="text-[0.8125rem] text-primary"
             >
-              Reset
+              Reset all
             </button>
           </div>
 
@@ -162,21 +216,142 @@ export function HomePage() {
             </div>
           </div>
 
-          <label className="flex items-center gap-2 cursor-pointer">
-            <div
-              className={`w-9 h-5 rounded-full transition-colors relative ${
-                onlyAvailable ? "bg-primary" : "bg-switch-background"
-              }`}
-              onClick={() => setOnlyAvailable(!onlyAvailable)}
-            >
-              <div
-                className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-transform shadow-sm ${
-                  onlyAvailable ? "translate-x-4" : "translate-x-0.5"
-                }`}
-              />
+          <div className="px-4 pt-3 pb-3 border-b border-border -mx-4">
+            <p className="text-[0.6875rem] font-semibold text-muted-foreground uppercase tracking-wider mb-2.5">
+              Power Output
+            </p>
+            <div className="flex gap-2 flex-wrap">
+              {[
+                { label: "All", sub: "Any" },
+                { label: "Level 1", sub: "≤2 kW" },
+                { label: "Level 2", sub: "3–22 kW" },
+                { label: "DC Fast", sub: "22kW+" },
+              ].map(({ label, sub }) => (
+                <button
+                  key={label}
+                  onClick={() => setPowerLevel(label)}
+                  className={`flex flex-col items-start px-3 py-2 rounded-xl border text-left transition-all duration-150 min-w-[4rem] ${
+                    powerLevel === label
+                      ? "bg-primary text-white border-primary shadow-sm"
+                      : "bg-muted/50 text-foreground border-border"
+                  }`}
+                >
+                  <span className="text-[0.8125rem] font-medium leading-tight">{label}</span>
+                  <span
+                    className={`text-[0.625rem] mt-0.5 ${
+                      powerLevel === label ? "text-white/80" : "text-muted-foreground"
+                    }`}
+                  >
+                    {sub}
+                  </span>
+                </button>
+              ))}
             </div>
-            <span className="text-[0.8125rem]">Available now only</span>
-          </label>
+          </div>
+
+          <div className="px-4 pt-3 pb-3 border-b border-border -mx-4">
+            <p className="text-[0.6875rem] font-semibold text-muted-foreground uppercase tracking-wider mb-2.5">
+              Minimum Rating
+            </p>
+            <div className="flex gap-2">
+              {["All", "3+", "4+", "4.5+"].map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setMinRating(r)}
+                  className={`flex items-center gap-1 px-3 py-2 rounded-xl border text-[0.8125rem] font-medium transition-all duration-150 ${
+                    minRating === r
+                      ? "bg-primary text-white border-primary shadow-sm"
+                      : "bg-muted/50 text-foreground border-border"
+                  }`}
+                >
+                  {r !== "All" && (
+                    <Star
+                      className={`w-3 h-3 ${
+                        minRating === r ? "text-white fill-white" : "text-amber-400 fill-amber-400"
+                      }`}
+                    />
+                  )}
+                  {r}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="px-4 pt-3 pb-3 border-b border-border -mx-4">
+            <p className="text-[0.6875rem] font-semibold text-muted-foreground uppercase tracking-wider mb-2.5">
+              Price Range
+            </p>
+            <div className="grid grid-cols-2 gap-1.5">
+              {[
+                { label: "All", sub: "Any price" },
+                { label: "Budget", sub: "Up to ₹80/hr" },
+                { label: "Mid", sub: "₹80–120/hr" },
+                { label: "Premium", sub: "₹120+/hr" },
+              ].map(({ label, sub }) => (
+                <button
+                  key={label}
+                  onClick={() => setPriceRange(label)}
+                  className={`flex flex-col items-start px-3 py-2.5 rounded-xl border text-left transition-all duration-150 ${
+                    priceRange === label
+                      ? "bg-primary text-white border-primary shadow-sm"
+                      : "bg-muted/50 text-foreground border-border"
+                  }`}
+                >
+                  <span className="text-[0.8125rem] font-medium">{label}</span>
+                  <span
+                    className={`text-[0.625rem] mt-0.5 ${
+                      priceRange === label ? "text-white/80" : "text-muted-foreground"
+                    }`}
+                  >
+                    {sub}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[0.875rem] font-medium text-foreground">Available now only</p>
+                <p className="text-[0.75rem] text-muted-foreground mt-0.5">Hide chargers that are currently busy</p>
+              </div>
+              <button
+                onClick={() => setOnlyAvailable(!onlyAvailable)}
+                className={`relative w-11 h-6 rounded-full transition-colors duration-200 flex-shrink-0 ${
+                  onlyAvailable ? "bg-primary" : "bg-switch-background"
+                }`}
+              >
+                <div
+                  className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200 ${
+                    onlyAvailable ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
+            </div>
+            <div className="border-t border-border mt-3 pt-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[0.875rem] font-medium text-foreground">Verified hosts only</p>
+                  <p className="text-[0.75rem] text-muted-foreground mt-0.5">
+                    Show chargers from identity-verified hosts
+                  </p>
+                </div>
+                <button
+                  onClick={() => setVerifiedOnly(!verifiedOnly)}
+                  className={`relative w-11 h-6 rounded-full transition-colors duration-200 flex-shrink-0 ${
+                    verifiedOnly ? "bg-primary" : "bg-switch-background"
+                  }`}
+                >
+                  <div
+                    className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200 ${
+                      verifiedOnly ? "translate-x-6" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
