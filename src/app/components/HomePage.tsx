@@ -281,8 +281,6 @@ export function HomePage() {
               ))}
             </div>
           </div>
-            </div>
-          </div>
 
           <div className="px-4 pt-3 pb-3 border-b border-border -mx-4">
             <p className="text-[0.6875rem] font-semibold text-muted-foreground uppercase tracking-wider mb-2.5">
