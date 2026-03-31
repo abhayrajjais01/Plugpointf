@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { addDays, format } from "date-fns";
 import {
@@ -38,11 +38,45 @@ export function BookingModal({ charger, onClose }: BookingModalProps) {
 
   const [step, setStep] = useState<Step>("datetime");
   const [selectedDate, setSelectedDate] = useState(dates[0]);
-  const [startTime, setStartTime] = useState("2:00 PM");
+  
+  // Helper to check if a time slot has passed
+  const isTimeInPast = (timeStr: string, dateStr: string) => {
+    const today = format(new Date(), "MMM d");
+    if (dateStr !== today) return false;
+
+    const now = new Date();
+    const [time, modifier] = timeStr.split(" ");
+    let [hours, minutes] = time.split(":").map(Number);
+    
+    if (modifier === "PM" && hours !== 12) hours += 12;
+    if (modifier === "AM" && hours === 12) hours = 0;
+    
+    const slotTime = new Date();
+    slotTime.setHours(hours, minutes || 0, 0, 0);
+    
+    // Give a 15 min buffer to account for the booking process
+    return slotTime.getTime() < now.getTime() - (15 * 60 * 1000);
+  };
+
+  // Find first available time slot for today
+  const defaultStartTime = useMemo(() => {
+    const firstFuture = timeSlots.find(t => !isTimeInPast(t, dates[0].date));
+    return firstFuture || "9:00 AM"; // Fallback to 9 AM if day is over
+  }, [dates]);
+
+  const [startTime, setStartTime] = useState(defaultStartTime);
   const [duration, setDuration] = useState(2);
   const [paymentMethod, setPaymentMethod] = useState("upi");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Update startTime when date changes if current startTime is invalid for new date
+  useEffect(() => {
+    if (isTimeInPast(startTime, selectedDate.date)) {
+      const nextValid = timeSlots.find(t => !isTimeInPast(t, selectedDate.date));
+      if (nextValid) setStartTime(nextValid);
+    }
+  }, [selectedDate, startTime]);
 
   const subtotal = charger.pricePerHour * duration;
   const serviceFee = 10;
@@ -135,13 +169,26 @@ export function BookingModal({ charger, onClose }: BookingModalProps) {
             <label className="text-[0.8125rem] text-muted-foreground mb-2 block" style={{ fontWeight: 500 }}>
               <Clock className="w-3.5 h-3.5 inline mr-1" />Start Time
             </label>
-            <div className="grid grid-cols-4 gap-1.5 mb-4">
-              {timeSlots.slice(0, 12).map((t) => (
-                <button key={t} onClick={() => setStartTime(t)}
-                  className={`px-2 py-1.5 rounded-lg text-[0.75rem] transition-colors ${startTime === t ? "bg-primary text-white" : "bg-muted text-foreground"}`}>
-                  {t}
-                </button>
-              ))}
+            <div className="grid grid-cols-4 gap-1.5 mb-4 max-h-[160px] overflow-y-auto pr-1 no-scrollbar">
+              {timeSlots.map((t) => {
+                const isPast = isTimeInPast(t, selectedDate.date);
+                return (
+                  <button 
+                    key={t} 
+                    onClick={() => !isPast && setStartTime(t)}
+                    disabled={isPast}
+                    className={`px-2 py-1.5 rounded-lg text-[0.75rem] transition-colors ${
+                      startTime === t 
+                        ? "bg-primary text-white" 
+                        : isPast 
+                          ? "bg-gray-100 text-gray-400 cursor-not-allowed opacity-50" 
+                          : "bg-muted text-foreground hover:bg-muted/80"
+                    }`}
+                  >
+                    {t}
+                  </button>
+                );
+              })}
             </div>
 
             <label className="text-[0.8125rem] text-muted-foreground mb-2 block" style={{ fontWeight: 500 }}>Duration (hours)</label>

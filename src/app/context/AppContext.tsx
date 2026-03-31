@@ -36,6 +36,7 @@ interface AppState {
   addCharger: (charger: Omit<Charger, "id">) => Promise<Charger | null>;
   refreshBookings: () => Promise<void>;
   fetchPublicChargers: (lat: number, lng: number) => Promise<void>;
+  fetchPublicChargersForRoute: (polyline: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppState | undefined>(undefined);
@@ -202,6 +203,52 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const fetchPublicChargersForRoute = async (polyline: string) => {
+    try {
+      const apiKey = (import.meta as any).env.VITE_OCM_API_KEY || '';
+      // distance is in km, adding a 5km buffer to the polyline route
+      const url = `https://api.openchargemap.io/v3/poi?output=json&polyline=${encodeURIComponent(polyline)}&distance=5&distanceunit=KM&maxresults=100` + (apiKey ? `&key=${apiKey}` : '');
+      const res = await fetch(url);
+      if (!res.ok) return;
+      const data = await res.json();
+      
+      const publicChargers: Charger[] = data.map((poi: any) => ({
+        id: `ocm-${poi.ID}`,
+        ownerId: `ocm-network`,
+        ownerName: poi.OperatorInfo?.Title || 'Public Station',
+        ownerAvatar: "https://images.unsplash.com/photo-1548625361-9d10e8c8942b?w=150&h=150&fit=crop", // placeholder
+        ownerRating: 4.0,
+        title: poi.AddressInfo?.Title || 'Public EV Charger',
+        description: poi.GeneralComments || "Public charging station provided via Open Charge Map. Pricing and availability may vary based on the network operator.",
+        image: "https://images.unsplash.com/photo-1593941707882-a5bba14938c7?w=1080&h=720&fit=crop", // placeholder
+        address: poi.AddressInfo?.AddressLine1 || 'Public Location',
+        city: poi.AddressInfo?.Town || '',
+        lat: poi.AddressInfo?.Latitude,
+        lng: poi.AddressInfo?.Longitude,
+        connectorType: poi.Connections?.[0]?.ConnectionType?.Title || 'Universal',
+        power: poi.Connections?.[0]?.PowerKW || 7.2,
+        pricePerHour: 100, // mock fallback
+        pricePerKwh: 15,
+        available: true,
+        availableHours: "24/7",
+        rating: 4.5,
+        reviewCount: 0,
+        amenities: ["Public Access", "On Route"],
+        instructions: poi.AddressInfo?.AccessComments || "Public usage. Follow operator instructions on site.",
+        verified: true,
+      }));
+
+      // Merge and avoid duplicates
+      setChargers(prev => {
+        const existingIds = new Set(prev.map(c => c.id));
+        const newChargers = publicChargers.filter(c => !existingIds.has(c.id));
+        return [...prev, ...newChargers];
+      });
+    } catch (err) {
+      console.error("Failed to fetch route-based OCM data:", err);
+    }
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -223,6 +270,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addCharger,
         refreshBookings,
         fetchPublicChargers,
+        fetchPublicChargersForRoute,
       }}
     >
       {children}

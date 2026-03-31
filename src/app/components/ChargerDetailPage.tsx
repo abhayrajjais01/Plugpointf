@@ -321,8 +321,8 @@ export function ChargerDetailPage() {
       </div>
 
       {/* Bottom Booking Bar */}
-      <div className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] left-0 right-0 z-40 bg-white border-t border-border px-4 py-3 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
-        <div className="flex items-center justify-between max-w-lg mx-auto">
+      <div className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 w-full max-w-lg z-40 bg-white border border-border px-4 py-3 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] rounded-t-3xl md:rounded-3xl md:mb-2">
+        <div className="flex items-center justify-between mx-auto">
           <div>
             <span className="text-[1.25rem] text-primary" style={{ fontWeight: 700 }}>
               ₹{charger.pricePerHour}

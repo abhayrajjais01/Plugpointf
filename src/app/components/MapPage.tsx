@@ -15,6 +15,7 @@ import {
 import { useApp } from "../context/AppContext";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import type { Charger } from "../data/mock-data";
+import { encodePolyline } from "../../lib/polyline";
 
 // Map center for Bangalore
 const MAP_CENTER: [number, number] = [77.63, 12.96]; // [lng, lat] for MapLibre
@@ -65,7 +66,7 @@ function minDistanceFromChargerToRoute(charger: Charger, routeCoords: [number, n
 }
 
 export function MapPage() {
-  const { chargers, fetchPublicChargers } = useApp();
+  const { chargers, fetchPublicChargers, fetchPublicChargersForRoute } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
@@ -74,6 +75,7 @@ export function MapPage() {
   const [selectedCharger, setSelectedCharger] = useState<Charger | null>(null);
   const [filterConnector, setFilterConnector] = useState("All");
   const [showOnlyAvailable, setShowOnlyAvailable] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
   
   // Trip Planner State
   const [isTripPanelOpen, setIsTripPanelOpen] = useState(tabParam === "trip");
@@ -168,6 +170,10 @@ export function MapPage() {
       const geojsonData = routeData.routes[0].geometry;
       setTripState((s) => ({ ...s, routeData: geojsonData, isLoading: false }));
       setIsTripPanelOpen(false);
+
+      // Fetch all public OCM chargers located along this driving polyline
+      const polylineStr = encodePolyline(geojsonData.coordinates);
+      fetchPublicChargersForRoute(polylineStr);
     } catch (err: any) {
       setTripState((s) => ({
         ...s,
@@ -280,6 +286,9 @@ export function MapPage() {
           if (userMarkerRef.current) {
             userMarkerRef.current.setLngLat([longitude, latitude]);
           }
+          if (isNavigating && mapRef.current) {
+            mapRef.current.flyTo({ center: [longitude, latitude], zoom: 16 });
+          }
         },
         (err) => console.error("Watch location error:", err),
         { enableHighAccuracy: true, maximumAge: 10000, timeout: 5000 }
@@ -291,7 +300,7 @@ export function MapPage() {
         navigator.geolocation.clearWatch(watchId);
       }
     };
-  }, [chargers]);
+  }, [chargers, isNavigating]);
 
   // Update trip link param
   useEffect(() => {
@@ -361,39 +370,51 @@ export function MapPage() {
     // Add/Update markers
     filtered.forEach(charger => {
       const isSelected = selectedCharger?.id === charger.id;
-      const color = isSelected ? "#10B981" : charger.available ? "#ffffff" : "#d1d5db";
-      const textColor = isSelected ? "#ffffff" : charger.available ? "#000000" : "#6b7280";
-      const borderColor = isSelected ? "#10B981" : "#e5e7eb";
+      // Active/Available color matching the orange pins in image
+      const pinFill = isSelected ? "#059669" : charger.available ? "#ea580c" : "#9ca3af";
+      const pinStroke = isSelected ? "#047857" : charger.available ? "#c2410c" : "#6b7280";
+      const scale = isSelected ? 'scale(1.15)' : 'scale(1)';
 
       if (markersRef.current[charger.id]) {
         const el = markersRef.current[charger.id].getElement();
-        el.style.backgroundColor = color;
-        el.style.color = textColor;
-        el.style.borderColor = borderColor;
-        el.style.transform = isSelected ? 'scale(1.2)' : 'scale(1)';
+        
+        // Update SVG fills and transform using the inner div
+        const inner = el.querySelector('.marker-inner') as HTMLDivElement;
+        const svgBg = el.querySelector('.marker-bg') as SVGElement;
+        
+        if (svgBg) {
+          svgBg.setAttribute('fill', pinFill);
+          svgBg.setAttribute('stroke', pinStroke);
+        }
+        if (inner) {
+          inner.style.transform = scale;
+        }
       } else {
         const el = document.createElement('div');
         el.className = 'custom-marker';
+        // MapLibre uses CSS translate for positioning, so we style the size but leave transform free
         el.style.cssText = `
-          display: flex; align-items: center; gap: 4px; padding: 4px 8px;
-          border-radius: 9999px; background-color: ${color}; color: ${textColor};
-          border: 1px solid ${borderColor}; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-          font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.2s;
-          position: relative;
-        `;
-        el.innerHTML = `
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-          </svg>
-          <span>₹${charger.pricePerHour}</span>
-          <div style="width: 8px; height: 8px; position: absolute; bottom: -4px; left: 50%; transform: translateX(-50%) rotate(45deg); background-color: inherit; border-right: 1px solid inherit; border-bottom: 1px solid inherit;"></div>
+          width: 32px; height: 40px; cursor: pointer;
         `;
         
-        el.addEventListener('click', () => {
+        // Add an inner div that we can safely transform for hover/selection scaling without conflicting with MapLibre
+        el.innerHTML = `
+        <div class="marker-inner" style="position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); transform-origin: bottom center; transform: ${scale}">
+          <svg class="marker-bg" viewBox="0 0 24 24" fill="${pinFill}" stroke="${pinStroke}" stroke-width="1.5" style="width: 36px; height: 36px; position: absolute; bottom: 0; left: -2px; filter: drop-shadow(0 4px 4px rgba(0,0,0,0.3)); z-index: 0; transition: fill 0.2s, stroke 0.2s;">
+            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+          </svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="#ffffff" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="position: relative; z-index: 1; margin-bottom: 6px;">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+          </svg>
+        </div>
+        `;
+        
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
           setSelectedCharger(prev => prev?.id === charger.id ? null : charger);
         });
 
-        markersRef.current[charger.id] = new maplibregl.Marker({ element: el })
+        markersRef.current[charger.id] = new maplibregl.Marker({ element: el, anchor: 'bottom' })
           .setLngLat([charger.lng, charger.lat])
           .addTo(map);
       }
@@ -402,6 +423,48 @@ export function MapPage() {
 
   return (
     <div className="relative h-full flex flex-col overflow-hidden bg-slate-50">
+      {/* Navigation Mode Header */}
+      {isNavigating && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4">
+          <div className="bg-white/95 backdrop-blur shadow-xl rounded-full px-4 py-2 flex items-center gap-3 border border-border">
+            <span className="flex h-3 w-3 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-600"></span>
+            </span>
+            <span className="text-[0.875rem] font-bold">Navigating...</span>
+            <div className="w-px h-4 bg-border/60 mx-1 border-gray-300"></div>
+            <button
+               onClick={() => {
+                 setIsNavigating(false);
+                 setTripState(s => ({...s, routeData: null}));
+               }}
+               className="text-[0.8125rem] text-red-600 font-bold hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded-md transition-colors"
+            >
+              End Trip
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Start Journey Overlay */}
+      {tripState.routeData && !isNavigating && (
+        <div className="absolute bottom-28 left-1/2 -translate-x-1/2 z-40 animate-in slide-in-from-bottom-8">
+          <button 
+             onClick={() => {
+               setIsNavigating(true);
+               if (mapRef.current && userMarkerRef.current) {
+                 const location = userMarkerRef.current.getLngLat() || mapRef.current.getCenter();
+                 mapRef.current.flyTo({ center: location, zoom: 16, pitch: 45 });
+               }
+             }}
+             className="bg-blue-600 text-white px-8 py-3.5 rounded-full shadow-lg font-bold flex items-center gap-2 hover:bg-blue-700 transition-colors shadow-blue-600/20"
+          >
+            <Navigation className="w-5 h-5 fill-current" />
+            Start Journey
+          </button>
+        </div>
+      )}
+
       {/* Top Controls */}
       <div className="absolute top-3 left-3 right-3 z-10 flex flex-col gap-2 pointer-events-none">
         <div className="flex gap-2 py-1 overflow-x-auto no-scrollbar pointer-events-auto items-center">
