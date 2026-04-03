@@ -13,6 +13,14 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error("CRITICAL: Supabase environment variables are missing! Check your Netlify settings.");
+}
+
 // This 'supabase' object is what the rest of the app 
 // uses to send and receive data.
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// We use a fallback if missing to prevent a complete app crash during import
+export const supabase = createClient(
+  supabaseUrl || 'https://placeholder.supabase.co', 
+  supabaseAnonKey || 'placeholder'
+);

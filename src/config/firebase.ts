@@ -19,6 +19,12 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID || "your-app-id"
 };
 
+const isFirebaseConfigComplete = Object.values(firebaseConfig).every(val => val && val !== 'your-api-key' && !(val as string).includes('your-project'));
+
+if (!isFirebaseConfigComplete) {
+  console.warn("WARNING: Firebase configuration is incomplete! Some features may not work.");
+}
+
 // 1. Fire up the Firebase project
 const app = initializeApp(firebaseConfig);
 
