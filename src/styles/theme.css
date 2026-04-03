@@ -76,7 +76,16 @@
 
   /* Set the default background and text color for the whole screen */
   body {
-    @apply bg-background text-foreground shrink-0;
+    @apply bg-[#e5e7eb] text-foreground shrink-0 flex justify-center;
+    min-height: 100vh;
+  }
+
+  /* Root container to simulate a mobile app on desktop */
+  #root {
+    @apply bg-background w-full;
+    max-width: 480px;
+    min-height: 100vh;
+    box-shadow: 0 0 40px rgba(0,0,0,0.1);
   }
 
   /**

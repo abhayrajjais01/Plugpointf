@@ -10,7 +10,7 @@ import {
   SlidersHorizontal,
   X,
   Bolt,
-  DollarSign,
+  IndianRupee,
   Star,
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
@@ -394,7 +394,7 @@ export function HomePage() {
         {[
           { icon: Bolt, label: "Chargers", value: chargers.length.toString(), color: "bg-emerald-50 text-emerald-600" },
           { icon: MapPin, label: "Locations", value: "Bangalore", color: "bg-blue-50 text-blue-600" },
-          { icon: DollarSign, label: "From", value: "₹80/hr", color: "bg-amber-50 text-amber-600" },
+          { icon: IndianRupee, label: "From", value: "₹80/hr", color: "bg-amber-50 text-amber-600" },
           { icon: Star, label: "Avg Rating", value: "4.7", color: "bg-purple-50 text-purple-600" },
         ].map((stat) => (
           <div
