@@ -7,7 +7,6 @@ import {
   User,
   Zap,
   Plus,
-  Navigation,
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
 
@@ -15,8 +14,6 @@ import { useApp } from "../context/AppContext";
 const navItems = [
   { path: "/", icon: Search, label: "Discover" },
   { path: "/map", icon: MapPin, label: "Map" },
-  // This special path includes a ?tab=trip parameter to open the trip planner directly
-  { path: "/map?tab=trip", icon: Navigation, label: "Trip" },
   { path: "/list-charger", icon: Plus, label: "List" },
   { path: "/bookings", icon: CalendarDays, label: "Bookings" },
   { path: "/profile", icon: User, label: "Profile" },
