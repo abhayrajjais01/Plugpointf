@@ -1,9 +1,7 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router";
-import {
-  Zap, MapPin, Camera, DollarSign, Clock, Info,
-  CheckCircle, ArrowRight, ArrowLeft, Shield, Plus, Loader2, Upload,
-} from "lucide-react";
+import { Zap, MapPin, Camera, IndianRupee, Clock, Info, CheckCircle, ArrowRight, ArrowLeft, Shield, Plus, Loader2, Upload } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
 import { useApp } from "../context/AppContext";
 import { uploadChargerImage } from "../../lib/db";
 import type { Charger } from "../data/mock-data";
@@ -142,24 +140,50 @@ export function ListChargerPage() {
   // --- SUCCESS SCREEN ---
   if (submitted) {
     return (
-      <div className="flex flex-col items-center justify-center h-full px-6 text-center bg-white">
-        <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mb-6 animate-bounce">
-          <CheckCircle className="w-10 h-10 text-primary" />
-        </div>
-        <h1 className="text-[1.5rem] font-black text-slate-900">Host Mode Active!</h1>
-        <p className="text-[0.875rem] text-slate-500 mt-2 max-w-xs font-medium">
-          Your charger "{title}" is now online and available for booking!
-        </p>
-        <div className="flex flex-col gap-3 mt-8 w-full">
-          <button onClick={() => navigate("/")}
-            className="w-full py-3.5 bg-primary text-white rounded-2xl font-bold shadow-xl shadow-primary/20">
-            View My Listings
-          </button>
-          <button onClick={() => window.location.reload()}
-            className="w-full py-3.5 border border-slate-100 rounded-2xl font-bold text-slate-400">
-            Add Another Charger
-          </button>
-        </div>
+      <div className="flex flex-col items-center justify-center min-h-screen px-6 text-center bg-slate-50/50">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.5, type: "spring" }}
+          className="w-full max-w-sm bg-white p-8 rounded-[2.5rem] shadow-2xl shadow-emerald-500/10 border border-emerald-50 flex flex-col items-center"
+        >
+          <motion.div 
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ delay: 0.3, type: "spring", stiffness: 200 }}
+            className="w-24 h-24 bg-emerald-500 rounded-full flex items-center justify-center mb-8 shadow-lg shadow-emerald-500/30"
+          >
+            <CheckCircle className="w-12 h-12 text-white" />
+          </motion.div>
+          
+          <h1 className="text-[1.75rem] font-black text-slate-900 leading-tight">
+            Host mode <br />
+            <span className="text-emerald-500">activated!</span>
+          </h1>
+          
+          <p className="text-[0.9375rem] text-slate-500 mt-4 font-medium px-2">
+            Awesome! "{title}" is now live and ready to power up the EV community.
+          </p>
+          
+          <div className="flex flex-col gap-3 mt-10 w-full">
+            <button 
+              onClick={() => navigate("/")}
+              className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold shadow-xl shadow-slate-900/10 active:scale-95 transition-all"
+            >
+              Back to Explore
+            </button>
+            <button 
+              onClick={() => window.location.reload()}
+              className="w-full py-4 text-emerald-600 font-bold hover:bg-emerald-50 rounded-2xl transition-colors"
+            >
+              Add Another Charger
+            </button>
+          </div>
+        </motion.div>
+        
+        {/* Subtle background decoration */}
+        <div className="absolute top-1/4 -left-10 w-40 h-40 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-1/4 -right-10 w-60 h-60 bg-blue-500/5 rounded-full blur-3xl pointer-events-none" />
       </div>
     );
   }
@@ -271,15 +295,24 @@ export function ListChargerPage() {
             <div className="space-y-1.5">
               <label className="text-[0.75rem] text-slate-400 font-black uppercase tracking-wider">Price per Hour (₹)</label>
               <div className="relative">
-                <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
+                <IndianRupee className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
                 <input type="number" value={pricePerHour} onChange={(e) => setPricePerHour(e.target.value)} placeholder="e.g., 100"
                   className="w-full pl-11 pr-4 py-3.5 border border-slate-100 rounded-2xl bg-slate-50 text-[1.1rem] font-black outline-none focus:border-primary transition-all shadow-sm" />
               </div>
             </div>
 
+            <div className="space-y-1.5">
+              <label className="text-[0.75rem] text-slate-400 font-black uppercase tracking-wider">Available Hours *</label>
+              <div className="relative">
+                <Clock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
+                <input type="text" value={availableHours} onChange={(e) => setAvailableHours(e.target.value)} placeholder="e.g., 24/7 or 9AM - 8PM"
+                  className="w-full pl-11 pr-4 py-3.5 border border-slate-100 rounded-2xl bg-slate-50 text-[0.9rem] font-bold outline-none focus:border-primary transition-all shadow-sm" />
+              </div>
+            </div>
+
             <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center gap-3">
                <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm">
-                  <DollarSign className="w-5 h-5 text-primary" />
+                  <IndianRupee className="w-5 h-5 text-primary" />
                </div>
                <div>
                   <p className="text-[0.85rem] font-bold text-slate-800">Earnings Potential</p>

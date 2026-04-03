@@ -33,6 +33,12 @@ export function Layout() {
   const location = useLocation(); // Keeps track of which URL we are currently on
   const navigate = useNavigate(); // Lets us programmatically change the URL
   const { isAuthenticated } = useApp();
+  
+  // Some pages (like Charger Detail) have their own special bottom bars.
+  // We want to HIDE the global bottom navigation on those pages to avoid overlaps.
+  const isChargerDetail = location.pathname.startsWith("/charger/");
+  const isAuthPage = location.pathname === "/auth";
+  const hideNavBar = isChargerDetail || isAuthPage;
 
   return (
     // h-screen: makes the app exactly the height of the phone screen
@@ -78,7 +84,9 @@ export function Layout() {
       </main>
 
       {/* ─── BOTTOM NAVIGATION BAR ─── */}
-      <nav className="sticky bottom-0 z-50 bg-white/90 backdrop-blur-xl border-t border-slate-100 px-2 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_20px_rgba(0,0,0,0.03)]">
+      {/* Only show if we are NOT on a special page that hides it */}
+      {!hideNavBar && (
+        <nav className="sticky bottom-0 z-50 bg-white/90 backdrop-blur-xl border-t border-slate-100 px-2 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_20px_rgba(0,0,0,0.03)]">
         <div className="flex items-center justify-around max-w-lg mx-auto">
           {navItems.map((item) => {
             // Check if this nav item matches the current page we are on
@@ -124,6 +132,7 @@ export function Layout() {
           })}
         </div>
       </nav>
+      )}
 
       {/* This component shows temporary alerts (like "Booking Confirmed!") at the top */}
       <Toaster position="top-center" expand={true} richColors />

@@ -7,7 +7,7 @@ import { createClient } from "@supabase/supabase-js";
  * 
  * --- WHAT ARE ENVIRONMENT VARIABLES? ---
  * Notice 'import.meta.env'? These are secret keys stored 
- * in our '.env' file. We never share those secrets!
+
  */
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;

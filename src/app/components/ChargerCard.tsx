@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router";
+import { motion } from "motion/react";
 import { MapPin, Zap, Clock, Shield, Star } from "lucide-react";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { StarRating } from "./StarRating";
@@ -21,9 +22,11 @@ export function ChargerCard({ charger, variant = "grid" }: ChargerCardProps) {
   // used mainly when multiple chargers are packed together in a tight space
   if (variant === "list") {
     return (
-      <button
+      <motion.button
+        whileHover={{ scale: 1.01, x: 4 }}
+        whileTap={{ scale: 0.98 }}
         onClick={() => navigate(`/charger/${charger.id}`)}
-        className="flex gap-3 p-3 bg-white rounded-xl border border-slate-100 hover:shadow-lg transition-all text-left w-full active:scale-[0.98]"
+        className="flex gap-3 p-3 bg-white rounded-xl border border-slate-100 shadow-sm hover:shadow-md transition-all text-left w-full"
       >
         <div className="relative w-24 h-24 rounded-lg overflow-hidden flex-shrink-0 shadow-sm">
           <ImageWithFallback
@@ -59,18 +62,20 @@ export function ChargerCard({ charger, variant = "grid" }: ChargerCardProps) {
             </span>
           </div>
         </div>
-      </button>
+      </motion.button>
     );
   }
 
   // --- VARIANT 2: THE LARGE VERTICAL CARD ---
   // used on the Home Page for a premium, high-impact look
   return (
-    <button
+    <motion.button
+      whileHover={{ y: -4 }}
+      whileTap={{ scale: 0.98 }}
       onClick={() => navigate(`/charger/${charger.id}`)}
       // group: this special Tailwind class lets us trigger animations on children 
       // when the parent is hovered (e.g., zoom the image when we hover the card)
-      className="bg-white rounded-3xl border border-slate-100 shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all duration-500 text-left w-full flex flex-col group overflow-hidden"
+      className="bg-white rounded-3xl border border-slate-100 shadow-sm hover:shadow-2xl transition-all duration-500 text-left w-full flex flex-col group overflow-hidden"
     >
       {/* The Image Wrapper */}
       <div className="relative h-60 w-full shrink-0 overflow-hidden">
@@ -153,7 +158,7 @@ export function ChargerCard({ charger, variant = "grid" }: ChargerCardProps) {
             </div>
         </div>
       </div>
-    </button>
+    </motion.button>
   );
 }
 

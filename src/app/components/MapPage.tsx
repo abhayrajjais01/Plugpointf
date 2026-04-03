@@ -115,6 +115,8 @@ export function MapPage() {
   const mapRef = useRef<maplibregl.Map | null>(null);    // The actual map instance
   const markersRef = useRef<{ [key: string]: maplibregl.Marker }>({}); // All charger pins
   const userMarkerRef = useRef<maplibregl.Marker | null>(null);       // The blue dot for YOU
+  const hasInitializedNearest = useRef(false); // Tracks if we've already done the initial "nearest" selection
+  const lastFetchedLocation = useRef<{ lat: number; lng: number } | null>(null);
 
   // Filter logic
   const filtered = chargers.filter((c) => {
@@ -268,17 +270,25 @@ export function MapPage() {
             userMarkerRef.current.setLngLat([longitude, latitude]);
           }
 
-          if (mapRef.current) {
+          if (mapRef.current && !lastFetchedLocation.current) {
             mapRef.current.flyTo({
               center: [longitude, latitude],
               zoom: 14
             });
           }
 
-          // Fetch public chargers nearby
-          fetchPublicChargers(latitude, longitude);
+          // Fetch public chargers nearby only if location changed significantly (>500m) or it's the first time
+          const distanceMoved = lastFetchedLocation.current 
+            ? getDistance(latitude, longitude, lastFetchedLocation.current.lat, lastFetchedLocation.current.lng)
+            : Infinity;
 
-          if (chargers.length > 0) {
+          if (distanceMoved > 0.5) {
+             fetchPublicChargers(latitude, longitude);
+             lastFetchedLocation.current = { lat: latitude, lng: longitude };
+          }
+
+          // Only auto-select the nearest charger ONCE upon initial load
+          if (chargers.length > 0 && !hasInitializedNearest.current && !selectedCharger) {
             let nearest = chargers[0];
             let minDist = getDistance(latitude, longitude, nearest.lat, nearest.lng);
             
@@ -291,6 +301,7 @@ export function MapPage() {
             }
             
             setSelectedCharger(nearest);
+            hasInitializedNearest.current = true;
           }
         },
         (err) => console.error("Initial location error:", err),
@@ -318,7 +329,7 @@ export function MapPage() {
         navigator.geolocation.clearWatch(watchId);
       }
     };
-  }, [chargers, isNavigating]);
+  }, [chargers.length, isNavigating]); // Use chargers.length instead of chargers array to avoid ref issues triggering constantly
 
   // Update trip link param
   useEffect(() => {
@@ -490,7 +501,7 @@ export function MapPage() {
       {/* --- START JOURNEY BUTTON --- */}
       {/* This pops up only AFTER you've planned a route but BEFORE you start driving */}
       {tripState.routeData && !isNavigating && (
-        <div className="absolute bottom-28 left-1/2 -translate-x-1/2 z-40 animate-in slide-in-from-bottom-8">
+        <div className="absolute bottom-28 left-1/2 -translate-x-1/2 z-40 animate-in slide-in-from-bottom-8 flex gap-2">
           <button 
              onClick={() => {
                setIsNavigating(true); // Engages the GPS lock
@@ -507,6 +518,14 @@ export function MapPage() {
           >
             <Navigation className="w-5 h-5 fill-current" />
             Start Journey
+          </button>
+          
+          <button 
+            onClick={() => setTripState(s => ({ ...s, routeData: null }))}
+            className="bg-white text-slate-400 p-3.5 rounded-full shadow-lg border border-slate-100 hover:text-red-500 transition-colors"
+            title="Clear Route"
+          >
+            <X className="w-5 h-5" />
           </button>
         </div>
       )}
