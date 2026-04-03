@@ -23,6 +23,7 @@ import { useApp } from "../context/AppContext";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { StarRating } from "./StarRating";
 import { BookingModal } from "./BookingModal";
+import { ChatModal } from "./ChatModal";
 
 /**
  * --- CHARGER DETAIL PAGE ---
@@ -34,11 +35,12 @@ export function ChargerDetailPage() {
   const navigate = useNavigate();
   
   // We pull all chargers and reviews from our global AppContext
-  const { chargers, reviews } = useApp();
+  const { chargers, reviews, user } = useApp();
   
   // --- UI STATE ---
   const [showAllReviews, setShowAllReviews] = useState(false);
   const [showBooking, setShowBooking] = useState(false); // Controls the Booking Modal popup
+  const [showChat, setShowChat] = useState(false);
   const [liked, setLiked] = useState(false);
 
   // --- DATA LOOKUP ---
@@ -222,14 +224,25 @@ export function ChargerDetailPage() {
               <span className="text-[0.8rem] text-slate-400 font-bold">/ hour</span>
             </div>
           </div>
-          
-          <button
-            onClick={() => setShowBooking(true)}
-            className="flex-1 max-w-[200px] h-14 bg-primary text-white rounded-2xl font-black shadow-xl shadow-primary/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-          >
-            <Calendar className="w-5 h-5 fill-white/20" />
-            Reserve Now
-          </button>
+
+          <div className="flex items-center gap-2">
+            {user && charger.ownerId !== user.id && (
+              <button
+                onClick={() => setShowChat(true)}
+                className="w-14 h-14 border-2 border-primary rounded-2xl flex items-center justify-center text-primary hover:bg-primary/5 transition-colors"
+              >
+                <MessageCircle className="w-6 h-6" />
+              </button>
+            )}
+
+            <button
+              onClick={() => setShowBooking(true)}
+              className="flex-1 h-14 bg-primary text-white rounded-2xl font-black shadow-xl shadow-primary/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 px-6"
+            >
+              <Calendar className="w-5 h-5 fill-white/20" />
+              Reserve Now
+            </button>
+          </div>
         </div>
       </div>
 
@@ -238,6 +251,19 @@ export function ChargerDetailPage() {
         <BookingModal
           charger={charger}
           onClose={() => setShowBooking(false)}
+        />
+      )}
+      
+      {showChat && (
+        <ChatModal
+          charger={{
+            id: charger.id,
+            title: charger.title,
+            ownerId: charger.ownerId,
+            ownerName: charger.ownerName,
+            ownerAvatar: charger.ownerAvatar,
+          }}
+          onClose={() => setShowChat(false)}
         />
       )}
     </div>
