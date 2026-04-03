@@ -10,10 +10,12 @@ import {
   AlertCircle,
   ChevronRight,
   Star,
+  MessageCircle,
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { ReviewModal } from "./ReviewModal";
+import { ChatModal } from "./ChatModal";
 import type { Booking } from "../data/mock-data";
 
 // These are the categories a booking can fall into
@@ -29,12 +31,19 @@ export function BookingsPage() {
   const navigate = useNavigate();
   
   // cancelBooking is a function from AppContext that talks to the database
-  const { bookings, cancelBooking } = useApp();
+  const { bookings, cancelBooking, chargers } = useApp();
   
   // --- UI STATE ---
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("All");
   const [reviewBooking, setReviewBooking] = useState<Booking | null>(null); // To open the Review popup
   const [cancelConfirm, setCancelConfirm] = useState<string | null>(null); // To open the "Are you sure?" popup
+  const [chatCharger, setChatCharger] = useState<{
+    id: string;
+    title: string;
+    ownerId: string;
+    ownerName: string;
+    ownerAvatar: string;
+  } | null>(null);
 
   // --- FILTERING ---
   // If "All" is selected, show everything. Otherwise, only show matches.
@@ -207,10 +216,27 @@ export function BookingsPage() {
                       View Station
                     </button>
                     <button
+                      onClick={() => {
+                        const charger = chargers.find((c) => c.id === booking.chargerId);
+                        if (!charger) return;
+                        setChatCharger({
+                          id: charger.id,
+                          title: charger.title,
+                          ownerId: charger.ownerId,
+                          ownerName: charger.ownerName,
+                          ownerAvatar: charger.ownerAvatar,
+                        });
+                      }}
+                      className="flex-1 py-2.5 text-[0.8rem] font-bold border border-primary text-primary rounded-xl hover:bg-primary/5 transition-colors flex items-center justify-center gap-1.5"
+                    >
+                      <MessageCircle className="w-3.5 h-3.5" />
+                      Chat Host
+                    </button>
+                    <button
                       onClick={() => setCancelConfirm(booking.id)}
                       className="flex-1 py-2.5 text-[0.8rem] font-bold border border-red-100 text-red-500 rounded-xl hover:bg-red-50 transition-colors"
                     >
-                      Cancel Booking
+                      Cancel
                     </button>
                   </div>
                 )}
@@ -298,6 +324,13 @@ export function BookingsPage() {
         <ReviewModal
           booking={reviewBooking}
           onClose={() => setReviewBooking(null)}
+        />
+      )}
+
+      {chatCharger && (
+        <ChatModal
+          charger={chatCharger}
+          onClose={() => setChatCharger(null)}
         />
       )}
     </div>
