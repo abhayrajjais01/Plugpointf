@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
 import { Toaster } from "sonner";
 import {
@@ -19,7 +20,6 @@ const navItems = [
   { path: "/list-charger", icon: Plus, label: "List" },
   { path: "/bookings", icon: CalendarDays, label: "Bookings" },
   { path: "/messages", icon: MessageCircle, label: "Messages" },
-  { path: "/profile", icon: User, label: "Profile" },
 ];
 
 /**
@@ -32,8 +32,9 @@ const navItems = [
 export function Layout() {
   const location = useLocation(); // Keeps track of which URL we are currently on
   const navigate = useNavigate(); // Lets us programmatically change the URL
-  const { isAuthenticated } = useApp();
+  const { isAuthenticated, user } = useApp();
   const { totalUnread } = useConversations();
+  const [avatarError, setAvatarError] = useState(false);
   
   // Some pages (like Charger Detail) have their own special bottom bars.
   // We want to HIDE the global bottom navigation on those pages to avoid overlaps.
@@ -61,9 +62,20 @@ export function Layout() {
         {isAuthenticated ? (
           <button
             onClick={() => navigate("/profile")}
-            className="w-10 h-10 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center hover:bg-slate-100 transition-colors"
+            className="w-10 h-10 rounded-full flex items-center justify-center hover:opacity-80 transition-opacity active:scale-95"
           >
-            <User className="w-5 h-5 text-slate-400" />
+            {user?.avatar && !avatarError ? (
+              <img 
+                src={user.avatar} 
+                alt="" 
+                className="w-full h-full rounded-full object-cover shadow-sm border border-slate-200" 
+                onError={() => setAvatarError(true)} 
+              />
+            ) : (
+              <svg viewBox="0 0 24 24" className="w-11 h-11 text-slate-800" fill="currentColor">
+                 <path fillRule="evenodd" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" clipRule="evenodd" />
+              </svg>
+            )}
           </button>
         ) : (
           <button
@@ -87,8 +99,8 @@ export function Layout() {
       {/* ─── BOTTOM NAVIGATION BAR ─── */}
       {/* Only show if we are NOT on a special page that hides it */}
       {!hideNavBar && (
-        <nav className="sticky bottom-0 z-50 bg-white/90 backdrop-blur-xl border-t border-slate-100 px-2 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_20px_rgba(0,0,0,0.03)]">
-        <div className="flex items-center justify-around max-w-lg mx-auto">
+        <nav className="sticky bottom-0 z-50 bg-white/95 backdrop-blur-3xl border-t border-slate-100/50 px-2 pb-[env(safe-area-inset-bottom)] shadow-[0_-10px_40px_rgba(0,0,0,0.04)]">
+        <div className="flex items-center justify-around max-w-lg mx-auto py-1">
           {navItems.map((item) => {
             // Check if this nav item matches the current page we are on
             const isActive =
@@ -102,17 +114,19 @@ export function Layout() {
               <button
                 key={item.path}
                 onClick={() => navigate(item.path)}
-                className={`flex flex-col items-center py-2 px-3 min-w-[4.5rem] transition-all relative ${
-                  isPlusButton ? "" : isActive ? "text-primary scale-110" : "text-slate-300"
+                className={`flex flex-col items-center justify-center py-2 px-3 min-w-[4.8rem] rounded-2xl transition-all relative ${
+                  isPlusButton ? "" : isActive ? "text-primary scale-105" : "text-slate-400 hover:text-slate-600 hover:bg-slate-50/50"
                 }`}
               >
                 {/* Special design for the 'List Charger' button */}
                 {isPlusButton ? (
-                  <div className="w-12 h-12 -mt-8 bg-primary rounded-2xl flex items-center justify-center shadow-xl shadow-primary/30 border-4 border-white active:scale-90 transition-transform">
-                    <Icon className="w-6 h-6 text-white" />
+                  <div className="w-13 h-13 -mt-9 bg-primary/10 rounded-3xl p-1 shadow-lg shadow-primary/20">
+                    <div className="w-full h-full bg-primary rounded-2xl flex items-center justify-center border border-white/20 active:scale-90 transition-transform">
+                      <Icon className="w-6 h-6 text-white" />
+                    </div>
                   </div>
                 ) : (
-                  <Icon className={`w-5 h-5 ${isActive ? "stroke-[2.5px]" : "stroke-[2px]"}`} />
+                  <Icon className={`w-5 h-5 transition-transform duration-300 ${isActive ? "stroke-[2.5px] drop-shadow-sm" : "stroke-[2px]"}`} />
                 )}
                 
                 {/* Red badge for unread messages */}
