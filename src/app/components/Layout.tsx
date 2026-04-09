@@ -7,18 +7,18 @@ import {
   User,
   Zap,
   Plus,
-  Navigation,
+  MessageCircle,
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
+import { useConversations } from "../../hooks/useConversations";
 
 // This list defines our bottom navigation bar
 const navItems = [
   { path: "/", icon: Search, label: "Discover" },
   { path: "/map", icon: MapPin, label: "Map" },
-  // This special path includes a ?tab=trip parameter to open the trip planner directly
-  { path: "/map?tab=trip", icon: Navigation, label: "Trip" },
   { path: "/list-charger", icon: Plus, label: "List" },
   { path: "/bookings", icon: CalendarDays, label: "Bookings" },
+  { path: "/messages", icon: MessageCircle, label: "Messages" },
   { path: "/profile", icon: User, label: "Profile" },
 ];
 
@@ -33,6 +33,7 @@ export function Layout() {
   const location = useLocation(); // Keeps track of which URL we are currently on
   const navigate = useNavigate(); // Lets us programmatically change the URL
   const { isAuthenticated } = useApp();
+  const { totalUnread } = useConversations();
   
   // Some pages (like Charger Detail) have their own special bottom bars.
   // We want to HIDE the global bottom navigation on those pages to avoid overlaps.
@@ -112,6 +113,13 @@ export function Layout() {
                   </div>
                 ) : (
                   <Icon className={`w-5 h-5 ${isActive ? "stroke-[2.5px]" : "stroke-[2px]"}`} />
+                )}
+                
+                {/* Red badge for unread messages */}
+                {item.label === "Messages" && totalUnread > 0 && (
+                  <div className="absolute top-1 right-2 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center border-2 border-white">
+                    <span className="text-[0.55rem] font-black text-white">{totalUnread > 9 ? "9+" : totalUnread}</span>
+                  </div>
                 )}
                 
                 {/* The Label Text */}
