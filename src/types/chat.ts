@@ -9,10 +9,10 @@ export interface Conversation {
   last_message_at: string | null;
   host_unread_count: number;
   customer_unread_count: number;
-  // joined fields
+  // joined fields — must match profiles table columns (name, avatar_url)
   charger?: { title: string; id: string };
-  customer_profile?: { full_name: string; avatar_url: string | null };
-  host_profile?: { full_name: string; avatar_url: string | null };
+  customer_profile?: { name: string; avatar_url: string | null };
+  host_profile?: { name: string; avatar_url: string | null };
 }
 
 export interface Message {

@@ -226,7 +226,7 @@ export function ChargerDetailPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            {user && charger.ownerId !== user.id && (
+            {(!user || charger.ownerId !== user.id) && (
               <button
                 onClick={() => setShowChat(true)}
                 className="w-14 h-14 border-2 border-primary rounded-2xl flex items-center justify-center text-primary hover:bg-primary/5 transition-colors"

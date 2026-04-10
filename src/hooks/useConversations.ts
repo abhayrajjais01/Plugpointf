@@ -17,24 +17,24 @@ export function useConversations() {
     const fetchConversations = async () => {
       try {
         setLoading(true);
-        // Supabase query equivalent: fetch where host_id = user.id OR customer_id = user.id
-        // Since we don't have joined tables explicitly defined in the schema in a view,
-        // we might just fetch the raw conversations for now. Wait, the prompt says:
-        // "Join charger title, customer profile, host profile"
-        // Let's assume there are foreign keys set up correctly in Supabase.
+        // Fetch conversations where user is host OR customer,
+        // joining charger title and profile names from the profiles table.
+        // The profiles table uses 'name' (not 'full_name').
         const { data, error } = await supabase
           .from("conversations")
           .select(`
             *,
-            charger:chargers!conversations_listing_id_fkey(id, title),
-            customer_profile:profiles!conversations_customer_id_fkey(full_name, avatar_url),
-            host_profile:profiles!conversations_host_id_fkey(full_name, avatar_url)
+            charger:chargers!listing_id(id, title),
+            customer_profile:profiles!customer_id(name, avatar_url),
+            host_profile:profiles!host_id(name, avatar_url)
           `)
           .or(`host_id.eq.${user.id},customer_id.eq.${user.id}`)
-          .order("last_message_at", { ascending: false });
+          .order("last_message_at", { ascending: false, nullsFirst: false });
 
         if (!error && data) {
           setConversations(data as unknown as Conversation[]);
+        } else if (error) {
+          console.error("Supabase conversations query error:", error);
         }
       } catch (err) {
         console.error("Error fetching conversations:", err);
@@ -45,6 +45,9 @@ export function useConversations() {
 
     fetchConversations();
 
+    // Subscribe to ALL conversation changes and re-fetch.
+    // We can't do OR filters on realtime channels, so we listen to all
+    // changes on the conversations table and filter client-side in fetchConversations.
     const channel = supabase
       .channel("conversations_changes")
       .on(
@@ -53,19 +56,6 @@ export function useConversations() {
           event: "*",
           schema: "public",
           table: "conversations",
-          filter: `host_id=eq.${user.id}`, // We can't do OR in filter, need to subscribe to both or without filter
-        },
-        () => {
-          fetchConversations();
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "conversations",
-          filter: `customer_id=eq.${user.id}`,
         },
         () => {
           fetchConversations();

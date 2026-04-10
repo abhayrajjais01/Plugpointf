@@ -114,7 +114,7 @@ export function MessagesPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-baseline mb-1">
                       <p className={`font-bold truncate ${unread > 0 ? "text-slate-900" : "text-slate-700"}`}>
-                        {otherProfile?.full_name || "Unknown User"}
+                        {otherProfile?.name || "Unknown User"}
                       </p>
                       <p className={`text-[0.65rem] font-bold flex-shrink-0 ml-3 ${unread > 0 ? 'text-primary' : 'text-slate-400'}`}>
                         {conv.last_message_at
