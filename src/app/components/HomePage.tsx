@@ -23,6 +23,22 @@ import { useApp } from "../context/AppContext";
 import { ChargerCard } from "./ChargerCard";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 
+// --- MATH HELPER ---
+// Haversine formula: calculates real-world distance between two GPS points in kilometers.
+function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 // Standard options for the user to choose from
 const connectorTypes = ["All", "J1772", "CCS", "Tesla Wall Connector"];
 const sortOptions = ["Nearest", "Price: Low", "Price: High", "Top Rated"];
@@ -35,7 +51,7 @@ const sortOptions = ["Nearest", "Price: Low", "Price: High", "Top Rated"];
  */
 export function HomePage() {
   // We grab the list of chargers from our global AppContext
-  const { chargers, isAuthenticated, user } = useApp();
+  const { chargers, isAuthenticated, user, userLocation } = useApp();
   const navigate = useNavigate();
 
   // --- UI STATE ---
@@ -105,12 +121,18 @@ export function HomePage() {
         matchesVerified
       );
     })
-    // 4. Sort the results (e.g. cheapest first)
+    // 4. Sort the results (e.g. cheapest first, or nearest by GPS distance)
     .sort((a, b) => {
       if (sortBy === "Price: Low") return a.pricePerHour - b.pricePerHour;
       if (sortBy === "Price: High") return b.pricePerHour - a.pricePerHour;
       if (sortBy === "Top Rated") return b.rating - a.rating;
-      return 0; // Default: keep database order
+      // Default "Nearest": sort by distance from user location
+      if (userLocation) {
+        const distA = getDistance(userLocation.lat, userLocation.lng, a.lat, a.lng);
+        const distB = getDistance(userLocation.lat, userLocation.lng, b.lat, b.lng);
+        return distA - distB;
+      }
+      return 0;
     });
 
   const availableCount = chargers.filter((c) => c.available).length;
