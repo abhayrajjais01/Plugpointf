@@ -16,6 +16,7 @@ export const router = createBrowserRouter([
       { index: true, Component: HomePage },
       { path: "map", Component: MapPage },
       { path: "charger/:id", Component: ChargerDetailPage },
+      { path: "messages", Component: MessagesPage },
       { path: "bookings", Component: BookingsPage },
       { path: "list-charger", Component: ListChargerPage },
       { path: "profile", Component: ProfilePage },

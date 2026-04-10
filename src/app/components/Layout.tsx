@@ -19,6 +19,7 @@ const navItems = [
   { path: "/map?tab=trip", icon: Navigation, label: "Trip" },
   { path: "/list-charger", icon: Plus, label: "List" },
   { path: "/bookings", icon: CalendarDays, label: "Bookings" },
+  { path: "/messages", icon: MessageCircle, label: "Messages" },
   { path: "/profile", icon: User, label: "Profile" },
 ];
 
