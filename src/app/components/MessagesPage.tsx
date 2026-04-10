@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { toast } from "sonner";
 import { useNavigate } from "react-router";
 import { useApp } from "../context/AppContext";
 import { useConversations } from "../../hooks/useConversations";
@@ -33,7 +34,10 @@ export function MessagesPage() {
 
   // Mobile layout restricts us to either ListView or ThreadView strictly.
   if (activeId) {
-    return <ActiveThread conversationId={activeId} onBack={() => setActiveId(null)} user={user} />;
+    const conv = conversations.find((c) => c.id === activeId);
+    if (conv) {
+      return <ActiveThread conversation={conv} onBack={() => setActiveId(null)} user={user} />;
+    }
   }
 
   return (
@@ -141,9 +145,10 @@ export function MessagesPage() {
   );
 }
 
-function ActiveThread({ conversationId, onBack, user }: { conversationId: string; onBack: () => void; user: any }) {
-  const { messages, loading, sendMessage } = useMessages(conversationId);
+function ActiveThread({ conversation, onBack, user }: { conversation: any; onBack: () => void; user: any }) {
+  const { messages, loading, sendMessage } = useMessages(conversation.id);
   const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Auto scroll
@@ -151,14 +156,27 @@ function ActiveThread({ conversationId, onBack, user }: { conversationId: string
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleSend = () => {
-    if (!input.trim()) return;
-    sendMessage(input);
-    setInput("");
+  const handleSend = async () => {
+    if (!input.trim() || sending) return;
+    setSending(true);
+    const content = input;
+    
+    // Optimistic clear could happen here, but it's safer to wait for result or at least hold it if error
+    const { success, error } = await sendMessage(content);
+    
+    if (success) {
+      setInput("");
+    } else {
+      toast.error(error?.message || error || "Failed to send message. Are you logged in with a valid profile?");
+    }
+    setSending(false);
   };
 
+  const isHost = conversation.host_id === user.id;
+  const otherProfile = isHost ? conversation.customer_profile : conversation.host_profile;
+
   return (
-    <div className="flex flex-col h-full bg-slate-50/50 absolute inset-0 z-20 animate-in slide-in-from-right-8 duration-300">
+    <div className="flex flex-col h-full bg-slate-50/50 relative z-20 animate-in slide-in-from-right-8 duration-300">
       {/* THREAD HEADER */}
       <div className="flex items-center gap-3 px-4 py-4 bg-white/90 backdrop-blur-xl border-b border-slate-100 shadow-sm z-30">
         <button
@@ -167,11 +185,20 @@ function ActiveThread({ conversationId, onBack, user }: { conversationId: string
         >
           <ChevronLeft className="w-6 h-6 text-slate-700" />
         </button>
-        <div className="flex-1 min-w-0">
-          <h2 className="text-[1.05rem] font-black text-slate-900 truncate">Chat Thread</h2>
-          <p className="text-[0.7rem] text-emerald-500 font-bold flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Active Match
-          </p>
+        <div className="flex-1 min-w-0 flex items-center gap-2">
+          <img
+            src={otherProfile?.avatar_url || "https://i.pravatar.cc/150"}
+            alt={otherProfile?.name || "User"}
+            className="w-9 h-9 rounded-full object-cover border border-slate-200"
+          />
+          <div className="flex flex-col">
+            <h2 className="text-[1.05rem] font-black text-slate-900 truncate">
+              {otherProfile?.name || "Unknown User"}
+            </h2>
+            <p className="text-[0.7rem] text-emerald-500 font-bold flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Active Match
+            </p>
+          </div>
         </div>
       </div>
 
@@ -245,9 +272,9 @@ function ActiveThread({ conversationId, onBack, user }: { conversationId: string
           />
           <button
             onClick={handleSend}
-            disabled={!input.trim()}
+            disabled={!input.trim() || sending}
             className={`w-11 h-11 mb-0.5 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${
-              input.trim()
+              input.trim() && !sending
                 ? "bg-primary shadow-lg shadow-primary/30 text-white active:scale-90"
                 : "bg-slate-200 text-slate-400"
             }`}

@@ -79,8 +79,8 @@ export function useMessages(conversationId?: string) {
     };
   }, [conversationId, user]);
 
-  const sendMessage = async (content: string) => {
-    if (!conversationId || !user || !content.trim()) return;
+  const sendMessage = async (content: string): Promise<{ success: boolean; error?: any }> => {
+    if (!conversationId || !user || !content.trim()) return { success: false, error: "Missing required fields" };
 
     try {
       // 1. Insert into messages
@@ -103,7 +103,7 @@ export function useMessages(conversationId?: string) {
         .eq("id", conversationId)
         .single();
 
-      if (!conv) return;
+      if (!conv) return { success: false, error: "Conversation not found" };
 
       // 3. Update conversations
       const isHost = conv.host_id === user.id;
@@ -117,9 +117,11 @@ export function useMessages(conversationId?: string) {
       };
 
       await supabase.from("conversations").update(updates).eq("id", conversationId);
-
+      
+      return { success: true };
     } catch (err) {
       console.error("Error sending message:", err);
+      return { success: false, error: err };
     }
   };
 

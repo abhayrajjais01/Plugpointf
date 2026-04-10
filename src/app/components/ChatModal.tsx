@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { X, Send, Loader2, LogIn } from "lucide-react";
+import { toast } from "sonner";
 import { useApp } from "../context/AppContext";
 import { useNavigate } from "react-router";
 import { supabase } from "../../config/supabase";
@@ -75,11 +76,21 @@ export function ChatModal({ charger, onClose }: ChatModalProps) {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const [sending, setSending] = useState(false);
+
   const handleSend = async () => {
-    if (!input.trim() || !conversationId) return;
+    if (!input.trim() || !conversationId || sending) return;
+    setSending(true);
     const content = input;
-    setInput(""); // Optimistic clear
-    await sendMessage(content);
+    
+    const { success, error } = await sendMessage(content);
+    
+    if (success) {
+      setInput(""); 
+    } else {
+      toast.error(error?.message || error || "Failed to send message.");
+    }
+    setSending(false);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -200,7 +211,7 @@ export function ChatModal({ charger, onClose }: ChatModalProps) {
             />
             <button
               onClick={handleSend}
-              disabled={!input.trim() || initLoading}
+              disabled={!input.trim() || initLoading || sending}
               className="w-9 h-9 bg-primary rounded-xl flex items-center justify-center disabled:opacity-40 transition-all active:scale-95 flex-shrink-0"
             >
               <Send className="w-4 h-4 text-white" />
