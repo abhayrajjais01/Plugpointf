@@ -8,6 +8,7 @@ import { ListChargerPage } from "./components/ListChargerPage";
 import { ProfilePage } from "./components/ProfilePage";
 import { AuthPage } from "./components/AuthPage";
 import { MessagesPage } from "./components/MessagesPage";
+import { ManageChargersPage } from "./components/ManageChargersPage";
 
 export const router = createBrowserRouter([
   {
@@ -22,6 +23,7 @@ export const router = createBrowserRouter([
       { path: "profile", Component: ProfilePage },
       { path: "auth", Component: AuthPage },
       { path: "messages", Component: MessagesPage },
+      { path: "manage-chargers", Component: ManageChargersPage },
     ],
   },
 ]);

@@ -79,7 +79,14 @@ export function ProfilePage() {
     {
       title: "Host",
       items: [
-        { icon: Zap, label: "My Chargers", detail: `${userChargers.length} listed`, iconBg: "bg-amber-500/10", iconColor: "text-amber-600", onClick: () => navigate("/list-charger") },
+        { 
+          icon: Zap, 
+          label: "My Chargers", 
+          detail: `${userChargers.length} listed`, 
+          iconBg: "bg-amber-500/10", 
+          iconColor: "text-amber-600", 
+          onClick: () => navigate(userChargers.length > 0 ? "/manage-chargers" : "/list-charger") 
+        },
         { icon: Award, label: "Host Level", detail: isSuperhost ? "Superhost ⭐" : "Standard", iconBg: "bg-primary/10", iconColor: "text-primary", onClick: () => toast.info("Host levels are assigned automatically.") },
       ],
     },

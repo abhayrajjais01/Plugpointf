@@ -24,6 +24,8 @@ import {
   updateBookingStatus,
   insertReview as dbInsertReview,
   insertCharger,
+  updateCharger as dbUpdateCharger,
+  deleteCharger as dbDeleteCharger,
   upsertProfile,
 } from "../../lib/db";
 
@@ -44,6 +46,8 @@ interface AppState {
   cancelBooking: (id: string) => Promise<void>;
   addReview: (review: Pick<Review, "chargerId" | "userId" | "userName" | "userAvatar" | "rating" | "comment">) => Promise<void>;
   addCharger: (charger: Omit<Charger, "id">) => Promise<Charger | null>;
+  updateCharger: (id: string, updates: Partial<Omit<Charger, "id">>) => Promise<boolean>;
+  deleteCharger: (id: string) => Promise<boolean>;
   refreshBookings: () => Promise<void>;
   fetchPublicChargers: (lat: number, lng: number) => Promise<void>;
   fetchPublicChargersForRoute: (polyline: string) => Promise<void>;
@@ -99,7 +103,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         verified: !!firebaseUser.emailVerified,
       };
       setUser(appUser);
-      
+
       // We also sync this info to our own Supabase 'profiles' table 
       // so we can store extra details like their phone number or custom avatar.
       upsertProfile({
@@ -172,6 +176,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return saved;
   };
 
+  const updateCharger = async (id: string, updates: Partial<Omit<Charger, "id">>): Promise<boolean> => {
+    const updated = await dbUpdateCharger(id, updates);
+    if (updated) {
+      setChargers((prev) => prev.map((c) => (c.id === id ? updated : c)));
+      return true;
+    }
+    return false;
+  };
+
+  const deleteCharger = async (id: string): Promise<boolean> => {
+    const success = await dbDeleteCharger(id);
+    if (success) {
+      setChargers((prev) => prev.filter((c) => c.id !== id));
+      return true;
+    }
+    return false;
+  };
+
   const refreshBookings = async () => {
     if (!firebaseUser) return;
     const fresh = await fetchBookings(firebaseUser.uid);
@@ -184,25 +206,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       // 1. Get our secret API key from the environment variables (.env file)
       const apiKey = (import.meta as any).env.VITE_OCM_API_KEY || '';
-      
+
       // 2. Build the URL. We ask for chargers within 15 KM of the user.
       const url = `https://api.openchargemap.io/v3/poi?output=json&latitude=${lat}&longitude=${lng}&distance=15&distanceunit=KM&maxresults=40` + (apiKey ? `&key=${apiKey}` : '');
-      
+
       const res = await fetch(url);
       if (!res.ok) return; // If the API is down or the key is wrong, just stop here.
       const data = await res.json();
-      
+
       // 3. The API gives us a lot of raw data. We "map" (transform) it into our 
       // standard "Charger" format so the rest of our app can display it easily.
       const publicChargers: Charger[] = data.map((poi: any) => ({
         id: `ocm-${poi.ID}`, // Prefix with 'ocm-' to avoid ID crashes with mock data
         ownerId: `ocm-network`,
         ownerName: poi.OperatorInfo?.Title || 'Public Station',
-        ownerAvatar: "https://images.unsplash.com/photo-1548625361-9d10e8c8942b?w=150&h=150&fit=crop", 
+        ownerAvatar: "https://images.unsplash.com/photo-1548625361-9d10e8c8942b?w=150&h=150&fit=crop",
         ownerRating: 4.0,
         title: poi.AddressInfo?.Title || 'Public EV Charger',
         description: poi.GeneralComments || "Public charging station provided via Open Charge Map.",
-        image: "https://images.unsplash.com/photo-1593941707882-a5bba14938c7?w=1080&h=720&fit=crop", 
+        image: "https://images.unsplash.com/photo-1593941707882-a5bba14938c7?w=1080&h=720&fit=crop",
         address: poi.AddressInfo?.AddressLine1 || 'Public Location',
         city: poi.AddressInfo?.Town || '',
         lat: poi.AddressInfo?.Latitude,
@@ -236,14 +258,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const fetchPublicChargersForRoute = async (polyline: string) => {
     try {
       const apiKey = (import.meta as any).env.VITE_OCM_API_KEY || '';
-      
+
       // We pass the 'polyline' string. The API finds chargers within 5 KM of that line.
       const url = `https://api.openchargemap.io/v3/poi?output=json&polyline=${encodeURIComponent(polyline)}&distance=5&distanceunit=KM&maxresults=100` + (apiKey ? `&key=${apiKey}` : '');
-      
+
       const res = await fetch(url);
       if (!res.ok) return;
       const data = await res.json();
-      
+
       const publicChargers: Charger[] = data.map((poi: any) => ({
         id: `ocm-${poi.ID}`,
         ownerId: `ocm-network`,
@@ -300,6 +322,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         cancelBooking,
         addReview,
         addCharger,
+        updateCharger,
+        deleteCharger,
         refreshBookings,
         fetchPublicChargers,
         fetchPublicChargersForRoute,

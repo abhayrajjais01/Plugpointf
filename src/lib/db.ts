@@ -129,6 +129,39 @@ export async function insertCharger(charger: Omit<Charger, "id">): Promise<Charg
   return mapCharger(data);
 }
 
+// This function updates an existing charger (e.g. changing availability)
+export async function updateCharger(id: string, updates: Partial<Omit<Charger, "id">>): Promise<Charger | null> {
+  const dbUpdates: any = {};
+  
+  if (updates.available !== undefined) dbUpdates.available = updates.available;
+  if (updates.title !== undefined) dbUpdates.title = updates.title;
+  if (updates.description !== undefined) dbUpdates.description = updates.description;
+  if (updates.pricePerHour !== undefined) dbUpdates.price_per_hour = updates.pricePerHour;
+  if (updates.availableHours !== undefined) dbUpdates.available_hours = updates.availableHours;
+  // Add other fields as needed for the future
+
+  const { data, error } = await supabase
+    .from("chargers")
+    .update(dbUpdates)
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) { console.error("updateCharger:", error.message); return null; }
+  return mapCharger(data);
+}
+
+// This function permanently deletes a charger
+export async function deleteCharger(id: string): Promise<boolean> {
+  const { error } = await supabase
+    .from("chargers")
+    .delete()
+    .eq("id", id);
+
+  if (error) { console.error("deleteCharger:", error.message); return false; }
+  return true;
+}
+
 // ─── Bookings ─────────────────────────────────────────────────
 
 export async function fetchBookings(userId: string): Promise<Booking[]> {
