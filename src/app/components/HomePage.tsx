@@ -121,12 +121,19 @@ export function HomePage() {
     <div className="pb-4 bg-background">
       
       {/* ═══════════════════════════════════════════
-          DARK HERO HEADER (Matches MapPage style)
+          HERO HEADER WITH BACKGROUND IMAGE
           ═══════════════════════════════════════════ */}
-      <div className="header-gradient relative overflow-hidden">
-        {/* Subtle radial glow effect */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-48 h-48 bg-blue-500/5 rounded-full translate-y-1/2 -translate-x-1/2 blur-3xl" />
+      <div className="relative overflow-hidden bg-slate-900">
+        {/* Background Image */}
+        <div className="absolute inset-0 z-0">
+          <img 
+            src="https://images.unsplash.com/photo-1765272088009-100c96a4cd4e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxlbGVjdHJpYyUyMHZlaGljbGUlMjBjaGFyZ2luZyUyMHN0YXRpb24lMjBtb2Rlcm58ZW58MXx8fHwxNzcxMzcwNTA2fDA&ixlib=rb-4.1.0&q=80&w=1080" 
+            alt="EV Charger"
+            className="w-full h-full object-cover opacity-60"
+          />
+          {/* Gradients to seamlessly blend the image into the UI */}
+          <div className="absolute inset-0 bg-gradient-to-b from-slate-900/60 via-transparent to-slate-900" />
+        </div>
         
         <div className="relative z-10">
           {/* Top Row: Logo + Profile */}
