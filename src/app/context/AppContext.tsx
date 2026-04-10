@@ -38,6 +38,7 @@ interface AppState {
   authLoading: boolean;
   authError: string | null;
   dataLoading: boolean;
+  userLocation: { lat: number; lng: number } | null;
   login: (email: string, password: string) => Promise<void>;
   signup: (name: string, email: string, password: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
@@ -71,6 +72,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   // --- STEP 1: INITIAL DATA LOAD ---
   // This runs exactly once when the app first opens.
@@ -83,6 +85,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setDataLoading(false); // Stop showing the loading spinner
     });
   }, []);
+
+  // --- STEP 1b: AUTO-FETCH NEARBY PUBLIC CHARGERS ---
+  // As soon as the app opens, get the user's GPS location and fetch
+  // nearby public chargers from Open Charge Map. This ensures the
+  // home page shows real chargers immediately, not just demo/DB ones.
+  const hasFetchedPublicRef = React.useRef(false);
+  useEffect(() => {
+    if (hasFetchedPublicRef.current) return; // Only run once
+    if (!navigator.geolocation) return;
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        setUserLocation({ lat: latitude, lng: longitude });
+        if (!hasFetchedPublicRef.current) {
+          hasFetchedPublicRef.current = true;
+          fetchPublicChargers(latitude, longitude);
+        }
+      },
+      (err) => {
+        console.warn("Geolocation denied/unavailable, public chargers won't auto-load:", err.message);
+      },
+      { timeout: 10000 }
+    );
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- STEP 2: USER SYNC ---
   // Every time the Firebase login status changes (logged in or out), 
@@ -314,6 +341,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         authLoading,
         authError,
         dataLoading,
+        userLocation,
         login,
         signup,
         loginWithGoogle,
