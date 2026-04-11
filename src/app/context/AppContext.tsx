@@ -52,6 +52,22 @@ interface AppState {
   refreshBookings: () => Promise<void>;
   fetchPublicChargers: (lat: number, lng: number) => Promise<void>;
   fetchPublicChargersForRoute: (polyline: string) => Promise<void>;
+  isNavigating: boolean;
+  setIsNavigating: React.Dispatch<React.SetStateAction<boolean>>;
+  tripState: {
+    origin: string;
+    destination: string;
+    isLoading: boolean;
+    routeData: any | null;
+    error: string | null;
+  };
+  setTripState: React.Dispatch<React.SetStateAction<{
+    origin: string;
+    destination: string;
+    isLoading: boolean;
+    routeData: any | null;
+    error: string | null;
+  }>>;
 }
 
 const AppContext = createContext<AppState | undefined>(undefined);
@@ -73,6 +89,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [isNavigating, setIsNavigating] = useState(false);
+  const [tripState, setTripState] = useState<{
+    origin: string;
+    destination: string;
+    isLoading: boolean;
+    routeData: any | null;
+    error: string | null;
+  }>({
+    origin: "",
+    destination: "",
+    isLoading: false,
+    routeData: null,
+    error: null,
+  });
 
   // --- STEP 1: INITIAL DATA LOAD ---
   // This runs exactly once when the app first opens.
@@ -355,6 +385,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         refreshBookings,
         fetchPublicChargers,
         fetchPublicChargersForRoute,
+        isNavigating,
+        setIsNavigating,
+        tripState,
+        setTripState,
       }}
     >
       {children}

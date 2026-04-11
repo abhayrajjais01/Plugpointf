@@ -87,7 +87,7 @@ function minDistanceFromChargerToRoute(charger: Charger, routeCoords: [number, n
 }
 
 export function MapPage() {
-  const { chargers, fetchPublicChargers, fetchPublicChargersForRoute, user } = useApp();
+  const { chargers, fetchPublicChargers, fetchPublicChargersForRoute, user, tripState, setTripState, isNavigating, setIsNavigating } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
@@ -100,24 +100,10 @@ export function MapPage() {
   const [showFastOnly, setShowFastOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearchPanel, setShowSearchPanel] = useState(false);
-  const [isNavigating, setIsNavigating] = useState(false);
   const [activeNavTab, setActiveNavTab] = useState<"map" | "trip" | "social">(tabParam === "trip" ? "trip" : "map");
   const [showFilters, setShowFilters] = useState(false);
   const [showListView, setShowListView] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [tripState, setTripState] = useState<{
-    origin: string;
-    destination: string;
-    isLoading: boolean;
-    routeData: any | null;
-    error: string | null;
-  }>({
-    origin: "",
-    destination: "",
-    isLoading: false,
-    routeData: null,
-    error: null,
-  });
 
   // --- REFS ---
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -770,7 +756,7 @@ export function MapPage() {
       )}
 
       {/* --- NAVIGATION MODE HEADER --- */}
-      {isNavigating && (
+      {activeNavTab === "map" && isNavigating && (
         <div className="absolute top-[calc(100px+4.5rem)] left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4">
           <div className="bg-white/95 backdrop-blur shadow-xl rounded-full px-4 py-2 flex items-center gap-3 border border-border">
             <span className="flex h-3 w-3 relative">
@@ -793,7 +779,7 @@ export function MapPage() {
       )}
 
       {/* --- START JOURNEY BUTTON --- */}
-      {tripState.routeData && !isNavigating && (
+      {activeNavTab === "map" && tripState.routeData && !isNavigating && (
         <div className="absolute bottom-44 left-1/2 -translate-x-1/2 z-40 animate-in slide-in-from-bottom-8 flex gap-2">
           <button 
              onClick={() => {
