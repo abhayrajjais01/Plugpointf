@@ -20,9 +20,14 @@ import {
   CheckCircle2,
   XCircle,
   BatteryCharging,
+  Users,
+  Globe,
+  Share2,
+  User
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
+import { ChargerCard } from "./ChargerCard";
 import type { Charger } from "../data/mock-data";
 import { encodePolyline } from "../../lib/polyline";
 
@@ -96,7 +101,9 @@ export function MapPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearchPanel, setShowSearchPanel] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
-  const [isTripPanelOpen, setIsTripPanelOpen] = useState(tabParam === "trip");
+  const [activeNavTab, setActiveNavTab] = useState<"map" | "trip" | "social">(tabParam === "trip" ? "trip" : "map");
+  const [showFilters, setShowFilters] = useState(false);
+  const [showListView, setShowListView] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [tripState, setTripState] = useState<{
     origin: string;
@@ -138,6 +145,14 @@ export function MapPage() {
     }
 
     return matchConnector && matchAvailable && matchFast && matchRoute && matchSearch;
+  }).sort((a, b) => {
+    // Sort by nearest distance if user location is known
+    if (userLocation) {
+      const distA = getDistance(userLocation.lat, userLocation.lng, a.lat, a.lng);
+      const distB = getDistance(userLocation.lat, userLocation.lng, b.lat, b.lng);
+      return distA - distB;
+    }
+    return 0; // Maintain original order if no location
   });
 
   // Calculate distance from user location
@@ -202,7 +217,7 @@ export function MapPage() {
 
       const geojsonData = routeData.routes[0].geometry;
       setTripState((s) => ({ ...s, routeData: geojsonData, isLoading: false }));
-      setIsTripPanelOpen(false);
+      setActiveNavTab("map"); // Switch back to map to show the route
 
       // Fetch all public OCM chargers located along this driving polyline
       const polylineStr = encodePolyline(geojsonData.coordinates);
@@ -356,7 +371,7 @@ export function MapPage() {
   // Update trip link param
   useEffect(() => {
     if (tabParam === "trip") {
-      setIsTripPanelOpen(true);
+      setActiveNavTab("trip");
       // Remove query param without reload
       window.history.replaceState({}, '', window.location.pathname);
     }
@@ -445,16 +460,16 @@ export function MapPage() {
         el.className = 'custom-marker';
         // MapLibre uses CSS translate for positioning, so we style the size but leave transform free
         el.style.cssText = `
-          width: 32px; height: 40px; cursor: pointer;
+          width: 24px; height: 30px; cursor: pointer;
         `;
         
         // Add an inner div that we can safely transform for hover/selection scaling without conflicting with MapLibre
         el.innerHTML = `
         <div class="marker-inner" style="position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); transform-origin: bottom center; transform: ${scale}">
-          <svg class="marker-bg" viewBox="0 0 24 24" fill="${pinFill}" stroke="${pinStroke}" stroke-width="1.5" style="width: 36px; height: 36px; position: absolute; bottom: 0; left: -2px; filter: drop-shadow(0 4px 4px rgba(0,0,0,0.3)); z-index: 0; transition: fill 0.2s, stroke 0.2s;">
+          <svg class="marker-bg" viewBox="0 0 24 24" fill="${pinFill}" stroke="${pinStroke}" stroke-width="1.5" style="width: 28px; height: 28px; position: absolute; bottom: 0; left: -2px; filter: drop-shadow(0 4px 4px rgba(0,0,0,0.3)); z-index: 0; transition: fill 0.2s, stroke 0.2s;">
             <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
           </svg>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="#ffffff" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="position: relative; z-index: 1; margin-bottom: 6px;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="#ffffff" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="position: relative; z-index: 1; margin-bottom: 5px;">
             <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
           </svg>
         </div>
@@ -489,10 +504,10 @@ export function MapPage() {
     <div className="relative h-full flex flex-col overflow-hidden bg-slate-50" style={{ marginTop: '-1px' }}>
       
       {/* === DARK HEADER SECTION (Statiq-style) === */}
-      <div className="relative z-30 flex flex-col" style={{ background: 'linear-gradient(135deg, #0f1b2d 0%, #1a2d47 50%, #152238 100%)' }}>
+      <div className="absolute top-0 left-0 right-0 z-30 flex flex-col pointer-events-none pb-6" style={{ background: 'linear-gradient(to bottom, rgba(15, 27, 45, 0.9) 0%, rgba(15, 27, 45, 0.5) 60%, rgba(15, 27, 45, 0) 100%)' }}>
         
         {/* Top Row: Vehicle selector + Rewards + Profile */}
-        <div className="flex items-center justify-between px-4 pt-3 pb-2">
+        <div className="flex items-center justify-between px-4 pt-3 pb-2 pointer-events-auto">
           {/* Vehicle / EV Selector */}
           <button className="flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-white/15 bg-white/5 backdrop-blur-sm hover:bg-white/10 transition-all active:scale-95">
             <div className="w-5 h-5 rounded-full bg-primary/80 flex items-center justify-center">
@@ -502,30 +517,49 @@ export function MapPage() {
             <ChevronDown className="w-3.5 h-3.5 text-white/50" />
           </button>
 
-          {/* Right side: Rewards badge + Profile */}
+          {/* Right side: Profile Badge */}
           <div className="flex items-center gap-2.5">
-            {/* PlugPoints Rewards Badge */}
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-emerald-500/20 to-emerald-400/10 border border-emerald-400/20">
-              <Zap className="w-3.5 h-3.5 text-emerald-400 fill-emerald-400" />
-              <span className="text-emerald-300 text-[0.65rem] font-black uppercase tracking-wider">Points</span>
-            </div>
-
-            {/* Trip / Route planner */}
             <button
-              onClick={() => setIsTripPanelOpen(!isTripPanelOpen)}
-              className={`p-2 rounded-full transition-all ${
-                isTripPanelOpen || tripState.routeData
-                  ? "bg-blue-500/30 border border-blue-400/30" 
-                  : "bg-white/5 border border-white/10 hover:bg-white/10"
-              }`}
+              onClick={() => navigate('/profile')}
+              className="w-8 h-8 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center hover:bg-white/20 transition-all shadow-sm"
             >
-              <Navigation className={`w-4 h-4 ${isTripPanelOpen || tripState.routeData ? 'text-blue-300' : 'text-white/70'}`} />
+              <User className="w-4 h-4 text-white" />
             </button>
           </div>
         </div>
 
-        {/* Search Bar */}
-        <div className="px-4 pb-2">
+        {/* Map/Trip/Social Navbar */}
+        <div className="px-4 pb-3 pt-1 pointer-events-auto flex justify-center">
+          <div className="bg-white/10 backdrop-blur-md p-1 rounded-full flex items-center gap-1 w-full max-w-md border border-white/20">
+            <button 
+              onClick={() => setActiveNavTab('map')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-full text-xs font-bold transition-all ${activeNavTab === 'map' ? 'bg-white text-slate-900 shadow-md' : 'text-white hover:bg-white/10'}`}
+            >
+              <MapPin className="w-3.5 h-3.5" />
+              Map
+            </button>
+            <button 
+              onClick={() => setActiveNavTab('trip')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-full text-xs font-bold transition-all ${activeNavTab === 'trip' ? 'bg-white text-slate-900 shadow-md' : 'text-white hover:bg-white/10'}`}
+            >
+              <Navigation className="w-3.5 h-3.5" />
+              Trip
+            </button>
+            <button 
+              onClick={() => setActiveNavTab('social')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-full text-xs font-bold transition-all ${activeNavTab === 'social' ? 'bg-white text-slate-900 shadow-md' : 'text-white hover:bg-white/10'}`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              Social
+            </button>
+          </div>
+        </div>
+
+        {/* Dynamic Content based on Active Tab */}
+        {activeNavTab === "map" && (
+          <div className="animate-in fade-in slide-in-from-top-2">
+            {/* Search Bar */}
+            <div className="px-4 pb-2 pointer-events-auto">
           <div className="flex items-center gap-2">
             <div className="flex-1 relative">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -540,78 +574,139 @@ export function MapPage() {
               />
             </div>
             <button
-              onClick={() => {
-                // Toggle filter expansion (we already have filters below, this is just a styling match)
-              }}
-              className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm hover:bg-slate-50 transition-colors"
+              onClick={() => setShowFilters(!showFilters)}
+              className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm transition-colors ${showFilters ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
             >
-              <SlidersHorizontal className="w-4.5 h-4.5 text-slate-600" />
+              <SlidersHorizontal className="w-4.5 h-4.5" />
             </button>
           </div>
         </div>
 
         {/* Filter Chips Row */}
-        <div className="px-4 pb-3 flex gap-2 overflow-x-auto no-scrollbar">
-          {/* Available Filter */}
-          <button
-            onClick={() => setShowOnlyAvailable(!showOnlyAvailable)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all border ${
-              showOnlyAvailable 
-                ? "bg-white text-slate-800 border-white shadow-sm" 
-                : "bg-white/8 text-white/80 border-white/10 hover:bg-white/15"
-            }`}
-          >
-            {showOnlyAvailable ? (
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-            ) : (
-              <CheckCircle2 className="w-3.5 h-3.5 text-white/40" />
-            )}
-            Available
-            {showOnlyAvailable && (
-              <X className="w-3 h-3 text-slate-400 ml-0.5 hover:text-slate-600" onClick={(e) => { e.stopPropagation(); setShowOnlyAvailable(false); }} />
-            )}
-          </button>
-
-          {/* Fast Charger Filter */}
-          <button
-            onClick={() => setShowFastOnly(!showFastOnly)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all border ${
-              showFastOnly 
-                ? "bg-white text-slate-800 border-white shadow-sm" 
-                : "bg-white/8 text-white/80 border-white/10 hover:bg-white/15"
-            }`}
-          >
-            <Zap className={`w-3.5 h-3.5 ${showFastOnly ? 'text-amber-500 fill-amber-500' : 'text-amber-400/60'}`} />
-            Fast charger
-          </button>
-
-          {/* Offers Filter (decorative for now) */}
-          <button
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all border bg-white/8 text-white/80 border-white/10 hover:bg-white/15"
-          >
-            <Gift className="w-3.5 h-3.5 text-pink-400/70" />
-            Offers
-          </button>
-
-          {/* Connector Type Filters */}
-          {["All", "CCS", "J1772", "Tesla"].map((type) => (
+        {showFilters && (
+          <div className="px-4 pb-3 flex gap-2 overflow-x-auto no-scrollbar pointer-events-auto animate-in fade-in slide-in-from-top-2">
+            {/* Available Filter */}
             <button
-              key={type}
-              onClick={() => setFilterConnector(type === "Tesla" ? "Tesla Wall Connector" : type)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all border ${
-                filterConnector === type || (type === "Tesla" && filterConnector === "Tesla Wall Connector")
-                  ? "bg-white text-slate-800 border-white shadow-sm"
-                  : "bg-white/8 text-white/80 border-white/10 hover:bg-white/15"
+              onClick={() => setShowOnlyAvailable(!showOnlyAvailable)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold whitespace-nowrap transition-all border shadow-sm ${
+                showOnlyAvailable 
+                  ? "bg-white text-slate-900 border-transparent shadow-md" 
+                  : "bg-white/10 backdrop-blur-md text-white border-white/20 hover:bg-white/20"
               }`}
             >
-              {type === "All" ? "All Chargers" : type}
+              {showOnlyAvailable ? (
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+              ) : (
+                <CheckCircle2 className="w-3.5 h-3.5 text-slate-300" />
+              )}
+              Available
+              {showOnlyAvailable && (
+                <X className="w-3 h-3 text-slate-500 ml-0.5 hover:text-slate-900" onClick={(e) => { e.stopPropagation(); setShowOnlyAvailable(false); }} />
+              )}
             </button>
-          ))}
-        </div>
+
+            {/* Fast Charger Filter */}
+            <button
+              onClick={() => setShowFastOnly(!showFastOnly)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold whitespace-nowrap transition-all border shadow-sm ${
+                showFastOnly 
+                  ? "bg-white text-slate-900 border-transparent shadow-md" 
+                  : "bg-white/10 backdrop-blur-md text-white border-white/20 hover:bg-white/20"
+              }`}
+            >
+              <Zap className={`w-3 h-3 ${showFastOnly ? 'text-amber-500 fill-amber-500' : 'text-amber-300 fill-amber-300'}`} />
+              Fast charger
+            </button>
+
+            {/* Offers Filter (decorative for now) */}
+            <button
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold whitespace-nowrap transition-all border shadow-sm bg-white/10 backdrop-blur-md text-white border-white/20 hover:bg-white/20"
+            >
+              <Gift className="w-3 h-3 text-white/80" />
+              Offers
+            </button>
+
+            {/* Connector Type Filters */}
+            {["All", "CCS", "J1772", "Tesla"].map((type) => (
+              <button
+                key={type}
+                onClick={() => setFilterConnector(type === "Tesla" ? "Tesla Wall Connector" : type)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold whitespace-nowrap transition-all border shadow-sm ${
+                  filterConnector === type || (type === "Tesla" && filterConnector === "Tesla Wall Connector")
+                    ? "bg-white text-slate-900 border-transparent shadow-md"
+                    : "bg-white/10 backdrop-blur-md text-white border-white/20 hover:bg-white/20"
+                }`}
+              >
+                {type === "All" ? "All" : type}
+              </button>
+            ))}
+          </div>
+        )}
+          </div>
+        )}
       </div>
 
+      {/* === SOCIAL PANEL CONTENT === */}
+      {activeNavTab === "social" && (
+        <div className="absolute inset-0 z-20 bg-slate-50 pt-[140px] px-4 overflow-y-auto pb-24">
+          <div className="max-w-md mx-auto space-y-4">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-lg font-bold text-slate-900">Community Trips</h2>
+              <button className="text-blue-600 text-sm font-semibold hover:text-blue-700">Share Trip</button>
+            </div>
+            
+            {[
+              { id: 1, user: "Alex M.", route: "Bangalore → Mysore", distance: "145 km", duration: "3h 15m", likes: 24, timeAgo: "2 hours ago", avatar: "AM" },
+              { id: 2, user: "Priya S.", route: "Mumbai → Pune", distance: "150 km", duration: "3h", likes: 56, timeAgo: "5 hours ago", avatar: "PS" },
+              { id: 3, user: "Rahul T.", route: "Delhi → Chandigarh", distance: "240 km", duration: "4h 30m", likes: 12, timeAgo: "1 day ago", avatar: "RT" },
+              { id: 4, user: "Neha K.", route: "Chennai → Pondicherry", distance: "165 km", duration: "3h 45m", likes: 89, timeAgo: "2 days ago", avatar: "NK" }
+            ].map(trip => (
+              <div key={trip.id} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">
+                      {trip.avatar}
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900">{trip.user}</h4>
+                      <p className="text-[10px] text-slate-500">{trip.timeAgo}</p>
+                    </div>
+                  </div>
+                  <button className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors">
+                    <Share2 className="w-4 h-4" />
+                  </button>
+                </div>
+                
+                <div className="flex items-center gap-2 text-slate-800">
+                  <Navigation className="w-4 h-4 text-blue-500" />
+                  <span className="text-sm font-bold">{trip.route}</span>
+                </div>
+                
+                <div className="flex items-center gap-4 text-xs font-medium text-slate-600 mt-1">
+                  <div className="flex items-center gap-1">
+                    <Globe className="w-3.5 h-3.5" />
+                    {trip.distance}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5" />
+                    {trip.duration}
+                  </div>
+                </div>
+                
+                <div className="pt-3 border-t border-slate-100 mt-1 flex items-center gap-4">
+                  <button className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-rose-500 transition-colors">
+                    <Star className="w-4 h-4" />
+                    {trip.likes} Likes
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* === TRIP PLANNING PANEL (slides under header) === */}
-      {isTripPanelOpen && (
+      {activeNavTab === "trip" && (
         <div className="absolute top-[calc(100px+4.5rem)] left-3 right-3 z-40 animate-in fade-in slide-in-from-top-4">
           <div className="bg-white/95 backdrop-blur-md p-4 rounded-2xl shadow-xl border border-white/20 flex flex-col gap-3 w-full max-w-sm">
             <div className="flex items-center justify-between">
@@ -621,9 +716,6 @@ export function MapPage() {
                    </div>
                    Plan your trip
                </h3>
-               <button onClick={() => setIsTripPanelOpen(false)} className="p-1.5 hover:bg-muted rounded-full">
-                 <X className="w-4 h-4" />
-               </button>
             </div>
             
             <div className="relative flex flex-col gap-2">
@@ -731,28 +823,31 @@ export function MapPage() {
       <div ref={mapContainerRef} className="flex-1 z-0" />
 
       {/* === FLOATING ACTION BUTTONS (Right side) === */}
-      <div className="absolute right-3 bottom-48 z-20 flex flex-col gap-2.5">
-        {/* GPS Center Button */}
-        <button
-          onClick={centerOnUser}
-          className="w-11 h-11 bg-white rounded-xl shadow-lg flex items-center justify-center border border-slate-100 hover:bg-slate-50 active:scale-95 transition-all"
-          title="Center on my location"
-        >
-          <LocateFixed className="w-5 h-5 text-slate-700" />
-        </button>
-        
-        {/* List View Toggle */}
-        <button
-          onClick={() => navigate("/")}
-          className="w-11 h-11 bg-white rounded-xl shadow-lg flex items-center justify-center border border-slate-100 hover:bg-slate-50 active:scale-95 transition-all"
-          title="List view"
-        >
-          <List className="w-5 h-5 text-slate-700" />
-        </button>
-      </div>
+      {activeNavTab === "map" && (
+        <div className="absolute right-3 bottom-48 z-20 flex flex-col gap-2.5">
+          {/* GPS Center Button */}
+          <button
+            onClick={centerOnUser}
+            className="w-11 h-11 bg-white rounded-xl shadow-lg flex items-center justify-center border border-slate-100 hover:bg-slate-50 active:scale-95 transition-all"
+            title="Center on my location"
+          >
+            <LocateFixed className="w-5 h-5 text-slate-700" />
+          </button>
+          
+          {/* List View Toggle */}
+          <button
+            onClick={() => setShowListView(true)}
+            className="w-11 h-11 bg-white rounded-xl shadow-lg flex items-center justify-center border border-slate-100 hover:bg-slate-50 active:scale-95 transition-all"
+            title="List view"
+          >
+            <List className="w-5 h-5 text-slate-700" />
+          </button>
+        </div>
+      )}
 
       {/* === BOTTOM STATION CARDS (Horizontally Scrollable) === */}
-      <div className="absolute bottom-2 left-0 right-0 z-20">
+      {activeNavTab === "map" && (
+        <div className="absolute bottom-2 left-0 right-0 z-20">
         <div 
           ref={cardScrollRef}
           className="flex gap-3 overflow-x-auto no-scrollbar px-3 pb-2 snap-x snap-mandatory"
@@ -856,14 +951,67 @@ export function MapPage() {
           })}
         </div>
       </div>
+      )}
 
       {/* === CHARGER COUNT BADGE (when no cards) === */}
-      {filtered.length === 0 && (
+      {activeNavTab === "map" && filtered.length === 0 && (
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10">
           <div className="bg-slate-900/90 backdrop-blur-md text-white shadow-2xl rounded-full px-5 py-2.5 flex items-center gap-3 border border-white/10">
             <span className="text-xs font-bold tracking-tight">
               No chargers match your filters
             </span>
+          </div>
+        </div>
+      )}
+
+      {/* === SLIDE-UP LIST VIEW === */}
+      {showListView && (
+        <div className="absolute inset-0 z-50 flex flex-col justify-end pointer-events-none">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm pointer-events-auto animate-in fade-in transition-opacity"
+            onClick={() => setShowListView(false)}
+          />
+          
+          {/* Panel */}
+          <div className="bg-slate-50 h-[85vh] rounded-t-3xl shadow-2xl pointer-events-auto flex flex-col relative animate-in slide-in-from-bottom duration-300">
+            {/* Header */}
+            <div className="flex items-center justify-between p-5 pb-3 bg-white rounded-t-3xl border-b border-slate-100 flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-emerald-500/10 rounded-xl flex items-center justify-center">
+                  <List className="w-5 h-5 text-emerald-600" />
+                </div>
+                <div>
+                  <h2 className="text-[1.1rem] font-bold text-slate-900">Nearby Chargers</h2>
+                  <p className="text-[0.75rem] text-slate-400 font-medium">{filtered.length} locations found</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowListView(false)}
+                className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center hover:bg-slate-200 transition-colors shadow-sm"
+              >
+                <X className="w-5 h-5 text-slate-600" />
+              </button>
+            </div>
+            
+            {/* List */}
+            <div className="flex-1 overflow-y-auto px-4 py-5 no-scrollbar">
+              {filtered.length === 0 ? (
+                <div className="text-center py-16 bg-white rounded-2xl border border-slate-100 shadow-sm">
+                  <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                    <Search className="w-7 h-7 text-slate-300" />
+                  </div>
+                  <p className="text-slate-600 text-[0.875rem] font-semibold">No chargers found</p>
+                  <p className="text-slate-400 text-[0.75rem] mt-1">Try adjusting your filters</p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  {filtered.map((charger) => (
+                    <ChargerCard key={charger.id} charger={charger} />
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
