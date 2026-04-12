@@ -18,9 +18,13 @@ import {
   Award,
   Car,
   Battery,
+  X,
+  Loader2,
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { toast } from "sonner";
+
+declare var Razorpay: any;
 
 /**
  * --- THE PROFILE PAGE ---
@@ -31,9 +35,72 @@ import { toast } from "sonner";
 export function ProfilePage() {
   const navigate = useNavigate();
   const [avatarError, setAvatarError] = useState(false);
+  const [isTopUpOpen, setIsTopUpOpen] = useState(false);
+  const [topUpAmount, setTopUpAmount] = useState<number>(500);
+  const [isToppingUp, setIsToppingUp] = useState(false);
   
   // We pull everything about the current user from our global AppContext
-  const { user, isAuthenticated, logout, bookings, chargers, reviews } = useApp();
+  const { user, isAuthenticated, logout, bookings, chargers, reviews, topUpWallet } = useApp();
+
+  const handleTopUp = async () => {
+    if (!user) return;
+    setIsToppingUp(true);
+    try {
+      const razorpayKeyId = import.meta.env.VITE_RAZORPAY_KEY_ID;
+
+      if (!razorpayKeyId) {
+        throw new Error("Razorpay is not configured. Please add VITE_RAZORPAY_KEY_ID to your .env file.");
+      }
+
+      // Open Razorpay checkout directly (no server-side order creation needed)
+      const options = {
+        key: razorpayKeyId,
+        amount: topUpAmount * 100, // Razorpay expects paise
+        currency: "INR",
+        name: "PlugPoint",
+        description: `Wallet Top-Up ₹${topUpAmount}`,
+        handler: async function (response: any) {
+          // This fires ONLY on successful payment
+          try {
+            const success = await topUpWallet(topUpAmount, response.razorpay_payment_id);
+            if (success) {
+              toast.success(`Successfully added ₹${topUpAmount} to your wallet!`);
+              setIsTopUpOpen(false);
+            } else {
+              toast.error("Payment received but failed to update wallet.");
+            }
+          } catch (err) {
+            toast.error("Wallet update error after payment.");
+          } finally {
+            setIsToppingUp(false);
+          }
+        },
+        prefill: {
+          name: user.name,
+          email: user.email,
+          contact: user.phone.replace(/\s/g, ''),
+        },
+        theme: {
+          color: "#10b981",
+        },
+        modal: {
+          ondismiss: function() {
+            setIsToppingUp(false);
+          }
+        }
+      };
+
+      const rzp = new Razorpay(options);
+      rzp.on('payment.failed', function (response: any){
+        toast.error(`Payment failed: ${response.error.description}`);
+        setIsToppingUp(false);
+      });
+      rzp.open();
+    } catch (e: any) {
+      toast.error(e.message || "An error occurred starting checkout.");
+      setIsToppingUp(false);
+    }
+  };
 
   // --- SECURITY CHECK ---
   // If the user isn't logged in, we show a "Please Sign In" empty state
@@ -70,7 +137,7 @@ export function ProfilePage() {
     {
       title: "Account",
       items: [
-        { icon: CreditCard, label: "Wallet Balance", detail: "₹0.00", iconBg: "bg-emerald-500/10", iconColor: "text-emerald-600", onClick: () => toast.info("Wallet & Payments coming soon!") },
+        { icon: CreditCard, label: "Wallet Balance", detail: `₹${user.walletBalance || 0}`, iconBg: "bg-emerald-500/10", iconColor: "text-emerald-600", onClick: () => setIsTopUpOpen(true) },
         { icon: Bell, label: "Active Bookings", detail: upcomingBookings > 0 ? `${upcomingBookings} upcoming` : "None", iconBg: "bg-blue-500/10", iconColor: "text-blue-600", onClick: () => navigate("/bookings") },
         { icon: Heart, label: "My Reviews", detail: `${userReviews} reviews`, iconBg: "bg-pink-500/10", iconColor: "text-pink-600", onClick: () => toast.info("Reviews management coming soon!") },
         { icon: MessageCircle, label: "Messages", detail: "", iconBg: "bg-purple-500/10", iconColor: "text-purple-600", onClick: () => navigate("/messages") },
@@ -247,6 +314,61 @@ export function ProfilePage() {
       <p className="text-center text-[0.65rem] text-slate-300 mt-6 pb-2 font-medium">
         PlugPoint v1.0.0 • Peer-to-Peer Charging
       </p>
+
+      {/* TOP-UP MODAL */}
+      {isTopUpOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50" onClick={() => !isToppingUp && setIsTopUpOpen(false)} />
+          <div className="relative bg-white rounded-2xl w-full max-w-sm p-5 shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2 text-emerald-600">
+                <CreditCard className="w-5 h-5" />
+                <h3 className="font-bold text-[1.1rem]">Top Up Wallet</h3>
+              </div>
+              <button onClick={() => !isToppingUp && setIsTopUpOpen(false)} className="text-slate-400 hover:bg-slate-100 p-1 rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <p className="text-slate-500 text-[0.85rem] mb-4">
+              Add funds to your PlugPoint wallet for seamless, one-tap booking. Current balance: <strong className="text-slate-800">₹{user.walletBalance || 0}</strong>
+            </p>
+
+            <div className="mb-4">
+              <label className="text-[0.8rem] font-bold text-slate-600 mb-1 block">Amount (₹)</label>
+              <input
+                type="number"
+                value={topUpAmount}
+                onChange={(e) => setTopUpAmount(Number(e.target.value))}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-lg font-bold text-slate-800 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                min="50"
+              />
+            </div>
+
+            <div className="flex gap-2 mb-5">
+              {[100, 500, 1000].map(amt => (
+                <button
+                  key={amt}
+                  onClick={() => setTopUpAmount(amt)}
+                  className={`flex-1 py-1.5 rounded-lg text-[0.8rem] font-bold border transition-colors ${
+                    topUpAmount === amt ? "border-primary bg-primary/5 text-primary" : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  ₹{amt}
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={handleTopUp}
+              disabled={isToppingUp || topUpAmount < 50}
+              className="w-full bg-primary text-white font-bold py-3.5 rounded-xl shadow-lg shadow-primary/20 flex justify-center items-center gap-2 hover:bg-primary/90 transition-colors disabled:opacity-50"
+            >
+              {isToppingUp ? <><Loader2 className="w-5 h-5 animate-spin" /> Processing...</> : `Pay ₹${topUpAmount}`}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   total_bookings INTEGER DEFAULT 0,
   rating NUMERIC(3,1) DEFAULT 5.0,
   verified BOOLEAN DEFAULT false,
+  wallet_balance NUMERIC(10,2) DEFAULT 50000.00,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -79,6 +80,17 @@ CREATE TABLE IF NOT EXISTS reviews (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Wallet Transactions
+CREATE TABLE IF NOT EXISTS wallet_transactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id TEXT REFERENCES profiles(id) ON DELETE CASCADE,
+  amount NUMERIC(10,2) NOT NULL,
+  type TEXT CHECK (type IN ('credit', 'debit')),
+  description TEXT,
+  reference_id TEXT, -- e.g., razorpay_order_id or booking_id
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ============================================================
 -- Row Level Security (permissive for MVP)
 -- ============================================================
@@ -86,11 +98,13 @@ ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chargers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bookings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reviews ENABLE ROW LEVEL SECURITY;
+ALTER TABLE wallet_transactions ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "profiles_all" ON profiles FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "chargers_all" ON chargers FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "bookings_all" ON bookings FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "reviews_all" ON reviews FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "wallet_tx_all" ON wallet_transactions FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
 -- ============================================================
 -- Seed: 6 demo chargers

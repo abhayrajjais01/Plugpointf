@@ -27,6 +27,8 @@ import {
   updateCharger as dbUpdateCharger,
   deleteCharger as dbDeleteCharger,
   upsertProfile,
+  fetchWalletBalance,
+  updateWalletBalance,
 } from "../../lib/db";
 
 interface AppState {
@@ -50,6 +52,8 @@ interface AppState {
   updateCharger: (id: string, updates: Partial<Omit<Charger, "id">>) => Promise<boolean>;
   deleteCharger: (id: string) => Promise<boolean>;
   refreshBookings: () => Promise<void>;
+  topUpWallet: (amount: number, paymentId: string) => Promise<boolean>;
+  payWithWallet: (amount: number, description: string) => Promise<boolean>;
   fetchPublicChargers: (lat: number, lng: number) => Promise<void>;
   fetchPublicChargersForRoute: (polyline: string) => Promise<void>;
   isNavigating: boolean;
@@ -158,6 +162,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         totalBookings: 0,
         rating: 5.0,
         verified: !!firebaseUser.emailVerified,
+        walletBalance: 50000,
       };
       setUser(appUser);
 
@@ -169,6 +174,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         avatar: appUser.avatar,
         email: appUser.email,
         phone: appUser.phone,
+      });
+
+      fetchWalletBalance(firebaseUser.uid).then(balance => {
+        setUser(prev => prev ? { ...prev, walletBalance: balance } : null);
       });
 
       // Finally, load all the bookings that belong to this specific user.
@@ -255,6 +264,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!firebaseUser) return;
     const fresh = await fetchBookings(firebaseUser.uid);
     setBookings(fresh);
+  };
+
+  const topUpWallet = async (amount: number, paymentId: string) => {
+    if (!firebaseUser) return false;
+    const success = await updateWalletBalance(firebaseUser.uid, amount, 'credit', 'Wallet Top-up via Razorpay', paymentId);
+    if (success) {
+      setUser(prev => prev ? { ...prev, walletBalance: prev.walletBalance + amount } : null);
+    }
+    return success;
+  };
+
+  const payWithWallet = async (amount: number, description: string) => {
+    if (!firebaseUser) return false;
+    const success = await updateWalletBalance(firebaseUser.uid, amount, 'debit', description);
+    if (success) {
+      setUser(prev => prev ? { ...prev, walletBalance: prev.walletBalance - amount } : null);
+    }
+    return success;
   };
 
   // This function fetches real-world EV chargers near a specific Latitude/Longitude.
@@ -383,6 +410,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         updateCharger,
         deleteCharger,
         refreshBookings,
+        topUpWallet,
+        payWithWallet,
         fetchPublicChargers,
         fetchPublicChargersForRoute,
         isNavigating,
