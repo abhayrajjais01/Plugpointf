@@ -8,6 +8,8 @@ import {
 import { useApp } from "../context/AppContext";
 import type { Charger } from "../data/mock-data";
 
+declare var Razorpay: any;
+
 interface BookingModalProps {
   charger: Charger;
   onClose: () => void;
@@ -23,7 +25,7 @@ type Step = "datetime" | "payment" | "confirmation";
 
 export function BookingModal({ charger, onClose }: BookingModalProps) {
   const navigate = useNavigate();
-  const { addBooking, user, isAuthenticated } = useApp();
+  const { addBooking, user, isAuthenticated, payWithWallet } = useApp();
 
   // Generate next 7 real dates dynamically
   const dates = useMemo(() =>
@@ -96,13 +98,7 @@ export function BookingModal({ charger, onClose }: BookingModalProps) {
     return endIdx < timeSlots.length ? timeSlots[endIdx] : "11:00 PM";
   };
 
-  const handleConfirm = async () => {
-    if (!isAuthenticated || !user) {
-      setError("Please sign in to make a booking.");
-      return;
-    }
-    setLoading(true);
-    setError(null);
+  const finalizeBooking = async () => {
     try {
       const saved = await addBooking({
         chargerId: charger.id,
@@ -124,6 +120,81 @@ export function BookingModal({ charger, onClose }: BookingModalProps) {
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
     } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleConfirm = async () => {
+    if (!isAuthenticated || !user) {
+      setError("Please sign in to make a booking.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+
+    try {
+      if (paymentMethod === "wallet") {
+        // --- WALLET FLOW ---
+        if (user.walletBalance < total) {
+          throw new Error("Insufficient wallet balance. Please use UPI/Card or add funds.");
+        }
+        const success = await payWithWallet(total, `Booking for ${charger.title}`);
+        if (!success) throw new Error("Wallet deduction failed.");
+        await finalizeBooking();
+      } else {
+        // --- RAZORPAY DIRECT CHECKOUT ---
+        // Works without a backend Edge Function. Razorpay handles the payment
+        // securely and the handler callback fires only on a successful payment.
+        const razorpayKeyId = import.meta.env.VITE_RAZORPAY_KEY_ID;
+
+        if (!razorpayKeyId) {
+          throw new Error("Razorpay is not configured. Please add VITE_RAZORPAY_KEY_ID to your .env file.");
+        }
+
+        const options = {
+          key: razorpayKeyId,
+          amount: total * 100, // Razorpay expects amount in paise (₹1 = 100 paise)
+          currency: "INR",
+          name: "PlugPoint",
+          description: `Booking: ${charger.title}`,
+          handler: async function (response: any) {
+            // This callback fires ONLY on successful payment
+            try {
+              await finalizeBooking();
+            } catch (err) {
+              setError("Booking save failed after payment.");
+              setLoading(false);
+            }
+          },
+          prefill: {
+            name: user.name,
+            email: user.email,
+            contact: user.phone.replace(/\s/g, ''),
+          },
+          notes: {
+            charger_id: charger.id,
+            booking_date: selectedDate.full,
+            booking_time: `${startTime} - ${getEndTime()}`,
+          },
+          theme: {
+            color: "#10b981",
+          },
+          modal: {
+            ondismiss: function() {
+              setLoading(false);
+            }
+          }
+        };
+
+        const rzp = new Razorpay(options);
+        rzp.on('payment.failed', function (response: any){
+          setError(`Payment failed: ${response.error.description}`);
+          setLoading(false);
+        });
+        rzp.open();
+      }
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "An error occurred.");
       setLoading(false);
     }
   };
@@ -260,7 +331,7 @@ export function BookingModal({ charger, onClose }: BookingModalProps) {
               {[
                 { id: "upi", label: "UPI", detail: "PhonePe / GPay / Paytm" },
                 { id: "card", label: "Credit / Debit Card", detail: "" },
-                { id: "wallet", label: "PlugPoint Wallet", detail: "₹0 balance" },
+                { id: "wallet", label: "PlugPoint Wallet", detail: `₹${user?.walletBalance || 0} balance` },
               ].map((m) => (
                 <button key={m.id} onClick={() => setPaymentMethod(m.id)}
                   className={`flex items-center gap-3 w-full p-3 rounded-xl border transition-colors ${paymentMethod === m.id ? "border-primary bg-secondary" : "border-border"}`}>

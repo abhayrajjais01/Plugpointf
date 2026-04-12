@@ -15,6 +15,7 @@ export interface User {
   totalBookings: number;  // How many times they have used the app to charge
   rating: number;         // Their average star rating (out of 5)
   verified: boolean;      // True if they have confirmed their identity
+  walletBalance: number;  // User's available wallet funds
 }
 
 /**
@@ -86,6 +87,7 @@ export const currentUser: User = {
   totalBookings: 14,
   rating: 4.9,
   verified: true,
+  walletBalance: 50000,
 };
 
 export const chargers: Charger[] = [

@@ -280,6 +280,51 @@ export async function upsertProfile(p: {
   if (error) console.error("upsertProfile:", error.message);
 }
 
+// ─── WALLET ───────────────────────────────────────────────────
+
+export async function fetchWalletBalance(userId: string): Promise<number> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("wallet_balance")
+    .eq("id", userId)
+    .single();
+  if (error) {
+    console.error("fetchWalletBalance:", error.message);
+    return 0;
+  }
+  return Number(data?.wallet_balance) || 0;
+}
+
+export async function updateWalletBalance(userId: string, changeAmount: number, type: 'credit' | 'debit', description: string, referenceId?: string): Promise<boolean> {
+  // 1. Get current balance
+  const currentBalance = await fetchWalletBalance(userId);
+  const newBalance = currentBalance + (type === 'credit' ? changeAmount : -changeAmount);
+
+  if (newBalance < 0) return false; // Insufficient funds
+
+  // 2. Update balance
+  const { error: updateError } = await supabase
+    .from("profiles")
+    .update({ wallet_balance: newBalance })
+    .eq("id", userId);
+
+  if (updateError) {
+    console.error("updateWalletBalance:", updateError.message);
+    return false;
+  }
+
+  // 3. Record transaction
+  await supabase.from("wallet_transactions").insert({
+    user_id: userId,
+    amount: changeAmount,
+    type,
+    description,
+    reference_id: referenceId
+  });
+
+  return true;
+}
+
 // ─── Storage: Charger Images ──────────────────────────────────
 
 export async function uploadChargerImage(file: File, ownerId: string): Promise<string> {
