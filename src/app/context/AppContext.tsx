@@ -127,19 +127,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const hasFetchedPublicRef = React.useRef(false);
   useEffect(() => {
     if (hasFetchedPublicRef.current) return; // Only run once
+    hasFetchedPublicRef.current = true;
+
+    // Fetch immediately for a default central location (e.g., Bangalore) 
+    // to ensure data is displayed instantly without waiting for GPS permissions.
+    fetchPublicChargers(12.96, 77.63);
+
     if (!navigator.geolocation) return;
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const { latitude, longitude } = pos.coords;
         setUserLocation({ lat: latitude, lng: longitude });
-        if (!hasFetchedPublicRef.current) {
-          hasFetchedPublicRef.current = true;
-          fetchPublicChargers(latitude, longitude);
-        }
+        // Fetch again for the user's real location and merge the results
+        fetchPublicChargers(latitude, longitude);
       },
       (err) => {
-        console.warn("Geolocation denied/unavailable, public chargers won't auto-load:", err.message);
+        console.warn("Geolocation denied/unavailable, using default location:", err.message);
       },
       { timeout: 10000 }
     );
