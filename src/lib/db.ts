@@ -174,6 +174,17 @@ export async function fetchBookings(userId: string): Promise<Booking[]> {
   return (data ?? []).map(mapBooking);
 }
 
+export async function fetchChargerBookingsByDate(chargerId: string, date: string): Promise<Booking[]> {
+  const { data, error } = await supabase
+    .from("bookings")
+    .select("*")
+    .eq("charger_id", chargerId)
+    .eq("date", date)
+    .neq("status", "cancelled"); // Ignore cancelled bookings
+  if (error) { console.error("fetchChargerBookingsByDate:", error.message); return []; }
+  return (data ?? []).map(mapBooking);
+}
+
 export async function insertBooking(
   booking: Omit<Booking, "id">,
   userId: string
