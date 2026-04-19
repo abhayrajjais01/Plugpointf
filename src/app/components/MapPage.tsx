@@ -28,6 +28,7 @@ import {
 import { useApp } from "../context/AppContext";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { ChargerCard } from "./ChargerCard";
+import { EvSetupModal } from "./EvSetupModal";
 import type { Charger } from "../data/mock-data";
 import { encodePolyline } from "../../lib/polyline";
 
@@ -87,7 +88,7 @@ function minDistanceFromChargerToRoute(charger: Charger, routeCoords: [number, n
 }
 
 export function MapPage() {
-  const { chargers, fetchPublicChargers, fetchPublicChargersForRoute, user, tripState, setTripState, isNavigating, setIsNavigating } = useApp();
+  const { chargers, fetchPublicChargers, fetchPublicChargersForRoute, user, tripState, setTripState, isNavigating, setIsNavigating, evDetails } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
@@ -104,6 +105,7 @@ export function MapPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [showListView, setShowListView] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [isEvSetupOpen, setIsEvSetupOpen] = useState(false);
 
   // --- REFS ---
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -495,11 +497,11 @@ export function MapPage() {
         {/* Top Row: Vehicle selector + Rewards + Profile */}
         <div className="flex items-center justify-between px-4 pt-3 pb-2 pointer-events-auto">
           {/* Vehicle / EV Selector */}
-          <button className="flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-white/15 bg-white/5 backdrop-blur-sm hover:bg-white/10 transition-all active:scale-95">
+          <button onClick={() => setIsEvSetupOpen(true)} className="flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-white/15 bg-white/5 backdrop-blur-sm hover:bg-white/10 transition-all active:scale-95">
             <div className="w-5 h-5 rounded-full bg-primary/80 flex items-center justify-center">
               <Zap className="w-3 h-3 text-white" />
             </div>
-            <span className="text-white text-xs font-semibold tracking-tight">My EV</span>
+            <span className="text-white text-xs font-semibold tracking-tight">{evDetails ? evDetails.make : "My EV"}</span>
             <ChevronDown className="w-3.5 h-3.5 text-white/50" />
           </button>
 
@@ -1001,6 +1003,9 @@ export function MapPage() {
           </div>
         </div>
       )}
+
+      {/* EV SETUP MODAL */}
+      <EvSetupModal isOpen={isEvSetupOpen} onClose={() => setIsEvSetupOpen(false)} />
     </div>
   );
 }

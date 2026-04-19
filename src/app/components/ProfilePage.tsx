@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { toast } from "sonner";
+import { EvSetupModal } from "./EvSetupModal";
 
 declare var Razorpay: any;
 
@@ -39,8 +40,11 @@ export function ProfilePage() {
   const [topUpAmount, setTopUpAmount] = useState<number>(500);
   const [isToppingUp, setIsToppingUp] = useState(false);
   
+  // My EV States
+  const [isEvSetupOpen, setIsEvSetupOpen] = useState(false);
+  
   // We pull everything about the current user from our global AppContext
-  const { user, isAuthenticated, logout, bookings, chargers, reviews, topUpWallet } = useApp();
+  const { user, isAuthenticated, logout, bookings, chargers, reviews, topUpWallet, evDetails } = useApp();
 
   const handleTopUp = async () => {
     if (!user) return;
@@ -154,6 +158,7 @@ export function ProfilePage() {
           iconColor: "text-amber-600", 
           onClick: () => navigate(userChargers.length > 0 ? "/manage-chargers" : "/list-charger") 
         },
+        { icon: CreditCard, label: "Earnings", detail: "View & Cashout", iconBg: "bg-emerald-500/10", iconColor: "text-emerald-600", onClick: () => navigate("/host-earnings") },
         { icon: Award, label: "Host Level", detail: isSuperhost ? "Superhost ⭐" : "Standard", iconBg: "bg-primary/10", iconColor: "text-primary", onClick: () => toast.info("Host levels are assigned automatically.") },
       ],
     },
@@ -231,10 +236,10 @@ export function ProfilePage() {
           </div>
           <div className="flex-1">
             <p className="text-[0.65rem] text-slate-400 font-bold uppercase tracking-wider">My Vehicle</p>
-            <p className="text-[0.85rem] font-bold text-slate-900">Add your EV</p>
+            <p className="text-[0.85rem] font-bold text-slate-900">{evDetails ? `${evDetails.make} ${evDetails.model}` : "Add your EV"}</p>
           </div>
-          <button className="px-3 py-1.5 bg-primary/8 text-primary rounded-lg text-[0.7rem] font-bold hover:bg-primary/15 transition-colors">
-            Setup
+          <button onClick={() => setIsEvSetupOpen(true)} className="px-3 py-1.5 bg-primary/8 text-primary rounded-lg text-[0.7rem] font-bold hover:bg-primary/15 transition-colors cursor-pointer">
+            {evDetails ? "Edit" : "Setup"}
           </button>
         </div>
       </div>
@@ -369,6 +374,9 @@ export function ProfilePage() {
           </div>
         </div>
       )}
+
+      {/* EV SETUP MODAL */}
+      <EvSetupModal isOpen={isEvSetupOpen} onClose={() => setIsEvSetupOpen(false)} />
     </div>
   );
 }

@@ -72,6 +72,8 @@ interface AppState {
     routeData: any | null;
     error: string | null;
   }>>;
+  evDetails: { make: string; model: string } | null;
+  setEvDetails: React.Dispatch<React.SetStateAction<{ make: string; model: string } | null>>;
 }
 
 const AppContext = createContext<AppState | undefined>(undefined);
@@ -107,6 +109,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     routeData: null,
     error: null,
   });
+
+  const [evDetails, setEvDetails] = useState<{ make: string; model: string } | null>(null);
+
+  // Load EV Details on mount
+  useEffect(() => {
+    const saved = localStorage.getItem("plugpoint_my_ev");
+    if (saved) {
+      try {
+        setEvDetails(JSON.parse(saved));
+      } catch (e) {}
+    }
+  }, []);
 
   // --- STEP 1: INITIAL DATA LOAD ---
   // This runs exactly once when the app first opens.
@@ -422,6 +436,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setIsNavigating,
         tripState,
         setTripState,
+        evDetails,
+        setEvDetails,
       }}
     >
       {children}
