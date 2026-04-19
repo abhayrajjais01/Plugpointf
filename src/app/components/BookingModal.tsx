@@ -1,12 +1,13 @@
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router";
-import { addDays, format } from "date-fns";
+import { addDays, format, parse, addMinutes } from "date-fns";
 import {
   X, Calendar, Clock, CreditCard, CheckCircle,
-  Zap, Shield, ChevronLeft, Loader2,
+  Zap, Shield, ChevronLeft, Loader2, IndianRupee
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import type { Charger } from "../data/mock-data";
+import { fetchChargerBookingsByDate } from "../../lib/db";
 
 declare var Razorpay: any;
 
@@ -15,88 +16,152 @@ interface BookingModalProps {
   onClose: () => void;
 }
 
-const timeSlots = [
+const hourlySlots = [
   "6:00 AM","7:00 AM","8:00 AM","9:00 AM","10:00 AM","11:00 AM",
   "12:00 PM","1:00 PM","2:00 PM","3:00 PM","4:00 PM","5:00 PM",
-  "6:00 PM","7:00 PM","8:00 PM","9:00 PM","10:00 PM",
+  "6:00 PM","7:00 PM","8:00 PM","9:00 PM","10:00 PM"
+];
+
+const halfHourlySlots = [
+  "6:00 AM","6:30 AM","7:00 AM","7:30 AM","8:00 AM","8:30 AM",
+  "9:00 AM","9:30 AM","10:00 AM","10:30 AM","11:00 AM","11:30 AM",
+  "12:00 PM","12:30 PM","1:00 PM","1:30 PM","2:00 PM","2:30 PM",
+  "3:00 PM","3:30 PM","4:00 PM","4:30 PM","5:00 PM","5:30 PM",
+  "6:00 PM","6:30 PM","7:00 PM","7:30 PM","8:00 PM","8:30 PM",
+  "9:00 PM","9:30 PM","10:00 PM","10:30 PM"
 ];
 
 type Step = "datetime" | "payment" | "confirmation";
+type BookingMode = "amount" | "time" | "future";
+
+function parseTimeToDate(timeStr: string, fullDateStr: string) {
+  return parse(`${fullDateStr} ${timeStr}`, 'MMM d, yyyy h:mm a', new Date());
+}
 
 export function BookingModal({ charger, onClose }: BookingModalProps) {
   const navigate = useNavigate();
   const { addBooking, user, isAuthenticated, payWithWallet } = useApp();
 
-  // Generate next 7 real dates dynamically
   const dates = useMemo(() =>
     Array.from({ length: 7 }, (_, i) => {
       const d = addDays(new Date(), i);
-      return {
-        day: format(d, "EEE"),
-        date: format(d, "MMM d"),
-        full: format(d, "MMM d, yyyy"),
-      };
+      return { day: format(d, "EEE"), date: format(d, "MMM d"), full: format(d, "MMM d, yyyy") };
     }), []);
 
   const [step, setStep] = useState<Step>("datetime");
+  const [bookingMode, setBookingMode] = useState<BookingMode>("amount");
   const [selectedDate, setSelectedDate] = useState(dates[0]);
   
-  // --- TIME VALIDATION HELPERS ---
-  // This tricky function checks if a specific hour has already passed on "Today".
-  // For example, if it's 1:00 PM now, we shouldn't allow a 9:00 AM booking.
-  const isTimeInPast = (timeStr: string, dateStr: string) => {
-    // 1. Get today's date in "MMM d" format (like "Oct 12")
-    const today = format(new Date(), "MMM d");
-    
-    // 2. If the user picked a future date (not today), then ALL times are valid.
-    if (dateStr !== today) return false;
+  // By Amount
+  const [enteredAmount, setEnteredAmount] = useState<number>(100);
+  
+  // By Time / Future
+  const [durationHours, setDurationHours] = useState<number>(1);
+  const [durationMins, setDurationMins] = useState<number>(0);
 
-    // 3. Convert the "timeStr" (like "2:00 PM") into a real JavaScript Date object
-    const now = new Date();
-    const [time, modifier] = timeStr.split(" ");
-    let [hours, minutes] = time.split(":").map(Number);
+  // Time grid
+  const [startTime, setStartTime] = useState("9:00 AM");
+  
+  const [existingBookings, setExistingBookings] = useState<any[]>([]);
+
+  // Adjust selectedDate if mode changes (hide future dates for amount/time)
+  useEffect(() => {
+    if (bookingMode !== "future") {
+      setSelectedDate(dates[0]);
+    }
+  }, [bookingMode, dates]);
+
+  useEffect(() => {
+    async function loadBookings() {
+      const data = await fetchChargerBookingsByDate(charger.id, selectedDate.full);
+      setExistingBookings(data);
+    }
+    loadBookings();
+  }, [charger.id, selectedDate.full]);
+
+  const blockedRanges = useMemo(() => {
+    return existingBookings.map(b => {
+      const startMs = parseTimeToDate(b.startTime, b.date).getTime();
+      const endMs = startMs + (b.duration * 60 * 60 * 1000);
+      return { startMs, endMs };
+    });
+  }, [existingBookings]);
+
+  const isTimeDisabled = (timeStr: string) => {
+    const slotStartMs = parseTimeToDate(timeStr, selectedDate.full).getTime();
+    const slotEndMs = slotStartMs + 60000; // 1 min buffer
     
-    // AM/PM logic: 1 PM is 13:00, 12 AM is 00:00
-    if (modifier === "PM" && hours !== 12) hours += 12;
-    if (modifier === "AM" && hours === 12) hours = 0;
-    
-    const slotTime = new Date();
-    slotTime.setHours(hours, minutes || 0, 0, 0);
-    
-    // 4. We compare the slot's time to right now. 
-    // We add a 15-minute buffer so you have time to finish typing before the slot "expires".
-    return slotTime.getTime() < now.getTime() - (15 * 60 * 1000);
+    if (slotStartMs < Date.now() - (15 * 60 * 1000)) return true;
+    return blockedRanges.some(r => slotStartMs < r.endMs && slotEndMs > r.startMs);
   };
 
-  // Find first available time slot for today
-  const defaultStartTime = useMemo(() => {
-    const firstFuture = timeSlots.find(t => !isTimeInPast(t, dates[0].date));
-    return firstFuture || "9:00 AM"; // Fallback to 9 AM if day is over
-  }, [dates]);
+  const activeTimeGrid = bookingMode === "future" ? halfHourlySlots : hourlySlots;
 
-  const [startTime, setStartTime] = useState(defaultStartTime);
-  const [duration, setDuration] = useState(2);
+  // Set default valid start time
+  useEffect(() => {
+    if (isTimeDisabled(startTime) || !activeTimeGrid.includes(startTime)) {
+      const nextValid = activeTimeGrid.find(t => !isTimeDisabled(t));
+      if (nextValid) setStartTime(nextValid);
+    }
+  }, [selectedDate, startTime, activeTimeGrid, blockedRanges]);
+
+  const getMaxAllowedDurationMinutes = () => {
+    try {
+      const startMs = parseTimeToDate(startTime, selectedDate.full).getTime();
+      let minDiffMs = Infinity;
+      for (const r of blockedRanges) {
+        // If the blocked range starts exactly or after our chosen start time
+        // Note: we consider equality as well to prevent overlapping with an exact start match
+        if (r.startMs > startMs) {
+             const diff = r.startMs - startMs;
+             if (diff < minDiffMs) minDiffMs = diff;
+        }
+      }
+      return Math.min(minDiffMs > 0 && minDiffMs !== Infinity ? minDiffMs / 60000 : 8 * 60, 8 * 60);
+    } catch (e) { return 8 * 60; }
+  };
+
+  useEffect(() => {
+    const maxMins = getMaxAllowedDurationMinutes();
+    if (bookingMode === "amount") {
+       const reqMins = (enteredAmount / charger.pricePerHour) * 60;
+       if (reqMins > maxMins) {
+           setEnteredAmount(Math.floor((maxMins / 60) * charger.pricePerHour));
+       }
+    } else {
+       const reqMins = (durationHours * 60) + durationMins;
+       if (reqMins > maxMins && maxMins >= 15) { // minimum 15 mins block
+           setDurationHours(Math.floor(maxMins / 60));
+           setDurationMins(maxMins % 60);
+       }
+    }
+  }, [startTime, enteredAmount, durationHours, durationMins, bookingMode, blockedRanges]);
+
+  // Derived Values
+  const finalDurationHoursFloat = bookingMode === "amount" 
+    ? enteredAmount / charger.pricePerHour 
+    : durationHours + (durationMins / 60);
+    
+  const finalDurationMinsTotal = finalDurationHoursFloat * 60;
+  
+  const finalEndTime = useMemo(() => {
+     try {
+       const startDate = parseTimeToDate(startTime, selectedDate.full);
+       if (isNaN(startDate.getTime())) return "Unknown";
+       const endDate = addMinutes(startDate, finalDurationMinsTotal);
+       return format(endDate, "h:mm a");
+     } catch (e) { return "Unknown"; }
+  }, [startTime, selectedDate.full, finalDurationMinsTotal]);
+
+  const finalUnitsKwh = Number((finalDurationHoursFloat * charger.power).toFixed(1));
+  const subtotal = bookingMode === "amount" ? enteredAmount : (finalDurationHoursFloat * charger.pricePerHour);
+  const serviceFee = 10;
+  const total = Number((subtotal + serviceFee).toFixed(2));
+
+  // Payment 
   const [paymentMethod, setPaymentMethod] = useState("upi");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Update startTime when date changes if current startTime is invalid for new date
-  useEffect(() => {
-    if (isTimeInPast(startTime, selectedDate.date)) {
-      const nextValid = timeSlots.find(t => !isTimeInPast(t, selectedDate.date));
-      if (nextValid) setStartTime(nextValid);
-    }
-  }, [selectedDate, startTime]);
-
-  const subtotal = charger.pricePerHour * duration;
-  const serviceFee = 10;
-  const total = subtotal + serviceFee;
-
-  const getEndTime = () => {
-    const startIdx = timeSlots.indexOf(startTime);
-    const endIdx = startIdx + duration;
-    return endIdx < timeSlots.length ? timeSlots[endIdx] : "11:00 PM";
-  };
 
   const finalizeBooking = async () => {
     try {
@@ -108,8 +173,8 @@ export function BookingModal({ charger, onClose }: BookingModalProps) {
         hostName: charger.ownerName,
         date: selectedDate.full,
         startTime,
-        endTime: getEndTime(),
-        duration,
+        endTime: finalEndTime,
+        duration: Number(finalDurationHoursFloat.toFixed(2)),
         totalCost: total,
         status: "upcoming",
         connectorType: charger.connectorType,
@@ -134,7 +199,6 @@ export function BookingModal({ charger, onClose }: BookingModalProps) {
 
     try {
       if (paymentMethod === "wallet") {
-        // --- WALLET FLOW ---
         if (user.walletBalance < total) {
           throw new Error("Insufficient wallet balance. Please use UPI/Card or add funds.");
         }
@@ -142,48 +206,22 @@ export function BookingModal({ charger, onClose }: BookingModalProps) {
         if (!success) throw new Error("Wallet deduction failed.");
         await finalizeBooking();
       } else {
-        // --- RAZORPAY DIRECT CHECKOUT ---
-        // Works without a backend Edge Function. Razorpay handles the payment
-        // securely and the handler callback fires only on a successful payment.
         const razorpayKeyId = import.meta.env.VITE_RAZORPAY_KEY_ID;
-
-        if (!razorpayKeyId) {
-          throw new Error("Razorpay is not configured. Please add VITE_RAZORPAY_KEY_ID to your .env file.");
-        }
+        if (!razorpayKeyId) throw new Error("Razorpay is not configured.");
 
         const options = {
           key: razorpayKeyId,
-          amount: total * 100, // Razorpay expects amount in paise (₹1 = 100 paise)
+          amount: Math.round(total * 100),
           currency: "INR",
           name: "PlugPoint",
           description: `Booking: ${charger.title}`,
           handler: async function (response: any) {
-            // This callback fires ONLY on successful payment
-            try {
-              await finalizeBooking();
-            } catch (err) {
-              setError("Booking save failed after payment.");
-              setLoading(false);
-            }
+            try { await finalizeBooking(); } 
+            catch (err) { setError("Booking save failed after payment."); setLoading(false); }
           },
-          prefill: {
-            name: user.name,
-            email: user.email,
-            contact: user.phone.replace(/\s/g, ''),
-          },
-          notes: {
-            charger_id: charger.id,
-            booking_date: selectedDate.full,
-            booking_time: `${startTime} - ${getEndTime()}`,
-          },
-          theme: {
-            color: "#10b981",
-          },
-          modal: {
-            ondismiss: function() {
-              setLoading(false);
-            }
-          }
+          prefill: { name: user.name, email: user.email, contact: user.phone.replace(/\s/g, '') },
+          theme: { color: "#10b981" },
+          modal: { ondismiss: function() { setLoading(false); } }
         };
 
         const rzp = new Razorpay(options);
@@ -199,45 +237,34 @@ export function BookingModal({ charger, onClose }: BookingModalProps) {
     }
   };
 
+  // Convert minutes to readable string
+  const getReadableDuration = (mins: number) => {
+    const h = Math.floor(mins / 60);
+    const m = Math.round(mins % 60);
+    if (h > 0 && m > 0) return `${h}h ${m}m`;
+    if (h > 0) return `${h} hr${h>1?'s':''}`;
+    return `${m} mins`;
+  };
+
   return (
-    // fixed inset-0: makes the dark background fill the whole screen
-    // z-50: ensures the modal stays on top of the map
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-      
-      {/* The dark semi-transparent overlay */}
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      
-      {/* The White Modal Content */}
-      {/* w-full: fills the width on mobile */}
-      {/* sm:max-w-md: limits width to 448px on tablets/laptops */}
-      {/* rounded-t-2xl: adds rounded corners only at the top (looks like a slide-up sheet on mobile) */}
-      <div className="relative bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl max-h-[90vh] overflow-y-auto">
+      <div className="relative bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
         
         {/* Header Block */}
-        {/* sticky top-0: keeps the header visible even if the modal has long content */}
-        <div className="sticky top-0 bg-white border-b border-border px-4 py-3 flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-white border-b border-border px-4 py-3 flex items-center justify-between z-10 shadow-sm">
           {step === "payment" ? (
-             // Shows a back arrow if we are on the payment screen
-            <button onClick={() => setStep("datetime")}>
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-          ) : (
-            <div className="w-5" />
-          )}
+            <button onClick={() => setStep("datetime")}><ChevronLeft className="w-5 h-5 cursor-pointer" /></button>
+          ) : <div className="w-5" />}
           
           <h3 className="text-[0.9375rem]" style={{ fontWeight: 600 }}>
-            {step === "datetime" ? "Select Date & Time" : step === "payment" ? "Payment" : "Booking Confirmed!"}
+            {step === "datetime" ? "Schedule Charge" : step === "payment" ? "Payment" : "Booking Confirmed!"}
           </h3>
-          
-          <button onClick={onClose}>
-            <X className="w-5 h-5 text-muted-foreground" />
-          </button>
+          <button onClick={onClose}><X className="w-5 h-5 text-muted-foreground" /></button>
         </div>
 
-        {/* STEP 1: DATE & TIME SELECTION */}
         {step === "datetime" && (
           <div className="p-4">
-            {/* Simple card showing which charger you are booking */}
             <div className="flex items-center gap-3 p-3 bg-secondary rounded-xl mb-4">
               <Zap className="w-5 h-5 text-primary" />
               <div className="flex-1">
@@ -247,71 +274,115 @@ export function BookingModal({ charger, onClose }: BookingModalProps) {
               <span className="text-[0.875rem] text-primary" style={{ fontWeight: 700 }}>₹{charger.pricePerHour}/hr</span>
             </div>
 
-            <label className="text-[0.8125rem] text-muted-foreground mb-2 block" style={{ fontWeight: 500 }}>
-              <Calendar className="w-3.5 h-3.5 inline mr-1" />Select Date
-            </label>
-            <div className="flex gap-2 overflow-x-auto no-scrollbar mb-4">
-              {dates.map((d) => (
-                <button key={d.date} onClick={() => setSelectedDate(d)}
-                  className={`flex flex-col items-center px-3 py-2 rounded-xl min-w-[3.5rem] transition-colors ${selectedDate.date === d.date ? "bg-primary text-white" : "bg-muted text-foreground"}`}>
-                  <span className="text-[0.6875rem]" style={{ fontWeight: 500 }}>{d.day}</span>
-                  <span className="text-[0.8125rem]" style={{ fontWeight: 600 }}>{d.date.split(" ")[1]}</span>
-                </button>
-              ))}
+            {/* TAB SELECTOR */}
+            <div className="flex p-1 bg-slate-100 rounded-xl mb-4">
+              <button onClick={()=>setBookingMode("amount")} className={`flex-1 text-[0.75rem] font-semibold py-2 rounded-lg transition-all ${bookingMode === "amount" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>By Amount</button>
+              <button onClick={()=>setBookingMode("time")} className={`flex-1 text-[0.75rem] font-semibold py-2 rounded-lg transition-all ${bookingMode === "time" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>By Time</button>
+              <button onClick={()=>setBookingMode("future")} className={`flex-1 text-[0.75rem] font-semibold py-2 rounded-lg transition-all ${bookingMode === "future" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>Future</button>
             </div>
 
-            <label className="text-[0.8125rem] text-muted-foreground mb-2 block" style={{ fontWeight: 500 }}>
-              <Clock className="w-3.5 h-3.5 inline mr-1" />Start Time
+            {/* DATE SELECTOR (Future Booking Only) */}
+            {bookingMode === "future" && (
+              <>
+                <label className="text-[0.8125rem] text-muted-foreground mb-2 block font-medium">Select Date</label>
+                <div className="flex gap-2 overflow-x-auto no-scrollbar mb-4">
+                  {dates.map((d) => (
+                    <button key={d.date} onClick={() => setSelectedDate(d)}
+                      className={`flex flex-col items-center px-3 py-2 rounded-xl min-w-[3.5rem] transition-colors ${selectedDate.date === d.date ? "bg-primary text-white shadow-sm" : "bg-muted text-foreground"}`}>
+                      <span className="text-[0.6875rem] font-medium">{d.day}</span>
+                      <span className="text-[0.8125rem] font-bold">{d.date.split(" ")[1]}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* START TIME */}
+            <label className="text-[0.8125rem] text-muted-foreground mb-2 flex items-center justify-between font-medium">
+              <span><Clock className="w-3.5 h-3.5 inline mr-1" />Start Time</span>
+              <span className="text-[0.6875rem] text-primary font-bold">Max allowed: {getReadableDuration(getMaxAllowedDurationMinutes())}</span>
             </label>
-            <div className="grid grid-cols-4 gap-1.5 mb-4 max-h-[160px] overflow-y-auto pr-1 no-scrollbar">
-              {timeSlots.map((t) => {
-                const isPast = isTimeInPast(t, selectedDate.date);
+            <div className="grid grid-cols-4 sm:grid-cols-5 gap-1.5 mb-4 max-h-[140px] overflow-y-auto pr-1 no-scrollbar">
+              {activeTimeGrid.map((t) => {
+                const isDisabled = isTimeDisabled(t);
                 return (
-                  <button 
-                    key={t} 
-                    onClick={() => !isPast && setStartTime(t)}
-                    disabled={isPast}
-                    className={`px-2 py-1.5 rounded-lg text-[0.75rem] transition-colors ${
-                      startTime === t 
-                        ? "bg-primary text-white" 
-                        : isPast 
-                          ? "bg-gray-100 text-gray-400 cursor-not-allowed opacity-50" 
-                          : "bg-muted text-foreground hover:bg-muted/80"
-                    }`}
-                  >
+                  <button key={t} onClick={() => !isDisabled && setStartTime(t)} disabled={isDisabled}
+                    className={`px-1.5 py-1.5 rounded-lg text-[0.7rem] font-medium transition-colors border ${
+                      startTime === t ? "bg-primary text-white border-primary" : isDisabled ? "bg-slate-50 text-slate-300 border-transparent cursor-not-allowed" : "bg-white text-slate-600 border-slate-200 hover:border-primary/50"
+                    }`}>
                     {t}
                   </button>
                 );
               })}
             </div>
 
-            <label className="text-[0.8125rem] text-muted-foreground mb-2 block" style={{ fontWeight: 500 }}>Duration (hours)</label>
-            <div className="flex items-center gap-3 mb-4">
-              <button onClick={() => setDuration(Math.max(1, duration - 1))}
-                className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center text-[1.125rem]">-</button>
-              <span className="text-[1.25rem] w-8 text-center" style={{ fontWeight: 700 }}>{duration}</span>
-              <button onClick={() => setDuration(Math.min(8, duration + 1))}
-                className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center text-[1.125rem]">+</button>
-              <span className="text-[0.75rem] text-muted-foreground ml-2">{startTime} – {getEndTime()}</span>
-            </div>
+            {/* AMOUNT / DURATION CONTROLS */}
+            {bookingMode === "amount" ? (
+               <div className="mb-4">
+                 <label className="text-[0.8125rem] text-muted-foreground mb-2 block font-medium">Charge Amount</label>
+                 <div className="relative">
+                   <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                     <IndianRupee className="w-5 h-5" />
+                   </div>
+                   <input type="number" min="10" step="10" value={enteredAmount || ''} 
+                    onChange={(e) => setEnteredAmount(Number(e.target.value))}
+                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-[1rem] font-bold focus:ring-2 focus:ring-primary/20 outline-none" placeholder="0" />
+                 </div>
+                 <div className="flex gap-4 mt-3 px-1">
+                   <div className="bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg flex-1 text-center border border-blue-100">
+                     <span className="block text-[0.6rem] font-semibold uppercase opacity-70">Calculated Time</span>
+                     <span className="text-[0.875rem] font-bold">{getReadableDuration(finalDurationMinsTotal)}</span>
+                   </div>
+                   <div className="bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg flex-1 text-center border border-emerald-100">
+                     <span className="block text-[0.6rem] font-semibold uppercase opacity-70">Est. Power</span>
+                     <span className="text-[0.875rem] font-bold">{finalUnitsKwh} kWh</span>
+                   </div>
+                 </div>
+               </div>
+            ) : (
+               <div className="mb-4">
+                 <label className="text-[0.8125rem] text-muted-foreground mb-2 block font-medium">Duration</label>
+                 <div className="flex gap-3">
+                   <div className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5">
+                     <span className="text-[0.6rem] text-slate-400 font-bold uppercase block mb-1">Hours</span>
+                     <select value={durationHours} onChange={e => setDurationHours(Number(e.target.value))} className="w-full bg-transparent text-[0.9375rem] font-bold outline-none cursor-pointer">
+                       {[0,1,2,3,4,5,6,7,8].map(h => <option key={`h-${h}`} value={h}>{h} hr{h !== 1 ? 's' : ''}</option>)}
+                     </select>
+                   </div>
+                   <div className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5">
+                     <span className="text-[0.6rem] text-slate-400 font-bold uppercase block mb-1">Minutes</span>
+                     <select value={durationMins} onChange={e => setDurationMins(Number(e.target.value))} className="w-full bg-transparent text-[0.9375rem] font-bold outline-none cursor-pointer">
+                       <option value={0}>0 min</option>
+                       <option value={15}>15 mins</option>
+                       <option value={30}>30 mins</option>
+                       <option value={45}>45 mins</option>
+                     </select>
+                   </div>
+                 </div>
+               </div>
+            )}
 
             <div className="p-3 bg-muted rounded-xl mb-4">
               <div className="flex justify-between text-[0.8125rem] mb-1">
-                <span className="text-muted-foreground">₹{charger.pricePerHour} × {duration} hr{duration > 1 ? "s" : ""}</span>
-                <span>₹{subtotal}</span>
+                <span className="text-muted-foreground">End Time</span>
+                <span className="font-semibold">{finalEndTime}</span>
               </div>
-              <div className="flex justify-between text-[0.8125rem] mb-1">
+              <div className="flex justify-between text-[0.8125rem] mb-1 text-muted-foreground">
+                <span className="text-muted-foreground">Subtotal</span>
+                <span>₹{subtotal.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-[0.8125rem] mb-1 text-muted-foreground">
                 <span className="text-muted-foreground">Service fee</span>
-                <span>₹{serviceFee}</span>
+                <span>₹{serviceFee.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-[0.9375rem] pt-2 border-t border-border mt-2" style={{ fontWeight: 700 }}>
                 <span>Total</span>
-                <span className="text-primary">₹{total}</span>
+                <span className="text-primary">₹{total.toFixed(2)}</span>
               </div>
             </div>
 
-            <button onClick={() => setStep("payment")}
-              className="w-full py-3 bg-primary text-white rounded-xl text-[0.9375rem]">
+            <button onClick={() => setStep("payment")} disabled={finalDurationMinsTotal === 0}
+              className="w-full py-3 bg-primary text-white rounded-xl text-[0.9375rem] font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
               Continue to Payment
             </button>
           </div>
@@ -322,8 +393,8 @@ export function BookingModal({ charger, onClose }: BookingModalProps) {
           <div className="p-4">
             <div className="p-3 bg-secondary rounded-xl mb-4">
               <p className="text-[0.8125rem]" style={{ fontWeight: 600 }}>{charger.title}</p>
-              <p className="text-[0.75rem] text-muted-foreground mt-0.5">{selectedDate.full} | {startTime} – {getEndTime()}</p>
-              <p className="text-[0.9375rem] text-primary mt-1" style={{ fontWeight: 700 }}>₹{total}</p>
+              <p className="text-[0.75rem] text-muted-foreground mt-0.5">{selectedDate.full} | {startTime} – {finalEndTime}</p>
+              <p className="text-[0.9375rem] text-primary mt-1" style={{ fontWeight: 700 }}>₹{total.toFixed(2)}</p>
             </div>
 
             <label className="text-[0.8125rem] text-muted-foreground mb-2 block" style={{ fontWeight: 500 }}>Payment Method</label>
@@ -334,7 +405,7 @@ export function BookingModal({ charger, onClose }: BookingModalProps) {
                 { id: "wallet", label: "PlugPoint Wallet", detail: `₹${user?.walletBalance || 0} balance` },
               ].map((m) => (
                 <button key={m.id} onClick={() => setPaymentMethod(m.id)}
-                  className={`flex items-center gap-3 w-full p-3 rounded-xl border transition-colors ${paymentMethod === m.id ? "border-primary bg-secondary" : "border-border"}`}>
+                  className={`flex items-center gap-3 w-full p-3 rounded-xl border transition-colors ${paymentMethod === m.id ? "border-primary bg-secondary shadow-sm" : "border-border"}`}>
                   <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${paymentMethod === m.id ? "border-primary" : "border-gray-300"}`}>
                     {paymentMethod === m.id && <div className="w-2 h-2 rounded-full bg-primary" />}
                   </div>
@@ -347,14 +418,14 @@ export function BookingModal({ charger, onClose }: BookingModalProps) {
 
             <div className="flex items-center gap-2 p-2.5 bg-emerald-50 rounded-lg mb-3">
               <Shield className="w-4 h-4 text-primary" />
-              <span className="text-[0.75rem] text-muted-foreground">Payment is held securely until your session completes</span>
+              <span className="text-[0.75rem] text-emerald-700 font-medium">Payment is held securely until your session completes</span>
             </div>
 
             {error && <p className="text-red-500 text-[0.8125rem] mb-3 text-center">{error}</p>}
 
             <button onClick={handleConfirm} disabled={loading}
-              className="w-full py-3 bg-primary text-white rounded-xl text-[0.9375rem] flex items-center justify-center gap-2 disabled:opacity-60">
-              {loading ? <><Loader2 className="w-4 h-4 animate-spin" />Confirming…</> : `Confirm & Pay ₹${total}`}
+              className="w-full py-3 bg-primary text-white rounded-xl text-[0.9375rem] font-semibold flex items-center justify-center gap-2 disabled:opacity-60 shadow-md">
+              {loading ? <><Loader2 className="w-4 h-4 animate-spin" />Confirming…</> : `Confirm & Pay ₹${total.toFixed(2)}`}
             </button>
           </div>
         )}
@@ -362,27 +433,27 @@ export function BookingModal({ charger, onClose }: BookingModalProps) {
         {/* Step 3: Confirmation */}
         {step === "confirmation" && (
           <div className="p-4 text-center">
-            <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4 scale-in">
               <CheckCircle className="w-8 h-8 text-primary" />
             </div>
-            <h2 className="text-[1.25rem]" style={{ fontWeight: 700 }}>Booking Confirmed!</h2>
-            <p className="text-[0.875rem] text-muted-foreground mt-1">Your booking has been saved ✓</p>
+            <h2 className="text-[1.25rem] font-bold">Booking Confirmed!</h2>
+            <p className="text-[0.875rem] text-slate-500 mt-1 font-medium">Your charging station is reserved ✓</p>
 
-            <div className="mt-4 p-4 bg-secondary rounded-xl text-left">
-              <p className="text-[0.9375rem]" style={{ fontWeight: 600 }}>{charger.title}</p>
-              <p className="text-[0.8125rem] text-muted-foreground mt-1">{charger.address}, {charger.city}</p>
-              <div className="flex items-center gap-4 mt-3">
-                <div><p className="text-[0.6875rem] text-muted-foreground">Date</p><p className="text-[0.8125rem]" style={{ fontWeight: 600 }}>{selectedDate.full}</p></div>
-                <div><p className="text-[0.6875rem] text-muted-foreground">Time</p><p className="text-[0.8125rem]" style={{ fontWeight: 600 }}>{startTime} – {getEndTime()}</p></div>
-                <div><p className="text-[0.6875rem] text-muted-foreground">Total</p><p className="text-[0.8125rem] text-primary" style={{ fontWeight: 700 }}>₹{total}</p></div>
+            <div className="mt-4 p-4 bg-secondary rounded-xl text-left shadow-sm border border-slate-100">
+              <p className="text-[0.9375rem] font-bold">{charger.title}</p>
+              <p className="text-[0.8125rem] text-slate-500 mt-1 font-medium">{charger.address}, {charger.city}</p>
+              <div className="flex items-center gap-4 mt-4 pt-3 border-t border-slate-200">
+                <div><p className="text-[0.6rem] uppercase tracking-wider text-slate-400 font-bold mb-0.5">Date</p><p className="text-[0.8125rem] font-bold text-slate-800">{selectedDate.full}</p></div>
+                <div><p className="text-[0.6rem] uppercase tracking-wider text-slate-400 font-bold mb-0.5">Time</p><p className="text-[0.8125rem] font-bold text-slate-800">{startTime} – {finalEndTime}</p></div>
+                <div><p className="text-[0.6rem] uppercase tracking-wider text-slate-400 font-bold mb-0.5">Total</p><p className="text-[0.8125rem] font-bold text-primary">₹{total.toFixed(2)}</p></div>
               </div>
             </div>
 
-            <div className="flex gap-2 mt-4">
+            <div className="flex gap-2 mt-5">
               <button onClick={() => { onClose(); navigate("/bookings"); }}
-                className="flex-1 py-2.5 bg-primary text-white rounded-xl text-[0.875rem]">View Bookings</button>
+                className="flex-1 py-3 bg-primary hover:bg-emerald-600 text-white font-bold rounded-xl text-[0.875rem] transition-colors shadow-md">View Bookings</button>
               <button onClick={onClose}
-                className="flex-1 py-2.5 border border-border rounded-xl text-[0.875rem]">Done</button>
+                className="flex-1 py-3 border border-slate-200 font-bold hover:bg-slate-50 rounded-xl text-[0.875rem] transition-colors">Done</button>
             </div>
           </div>
         )}
