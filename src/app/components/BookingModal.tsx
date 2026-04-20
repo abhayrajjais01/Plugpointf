@@ -3,7 +3,8 @@ import { useNavigate } from "react-router";
 import { addDays, format, parse, addMinutes } from "date-fns";
 import {
   X, Calendar, Clock, CreditCard, CheckCircle,
-  Zap, Shield, ChevronLeft, Loader2, IndianRupee
+  Zap, Shield, ChevronLeft, Loader2, IndianRupee,
+  BatteryCharging, Play
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import type { Charger } from "../data/mock-data";
@@ -431,7 +432,21 @@ export function BookingModal({ charger, onClose }: BookingModalProps) {
         )}
 
         {/* Step 3: Confirmation */}
-        {step === "confirmation" && (
+        {step === "confirmation" && (() => {
+          // Determine if the booking is "now" (today + start time is within current hour)
+          const todayStr = format(new Date(), "MMM d, yyyy");
+          const isToday = selectedDate.full === todayStr;
+          const now = new Date();
+          let canStartNow = false;
+          if (isToday) {
+            try {
+              const slotTime = parse(startTime, "h:mm a", new Date());
+              // Allow starting if session starts within the next 15 mins or has already started
+              const diffMs = slotTime.getTime() - now.getTime();
+              canStartNow = diffMs <= 15 * 60 * 1000;
+            } catch (e) { canStartNow = false; }
+          }
+          return (
           <div className="p-4 text-center">
             <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4 scale-in">
               <CheckCircle className="w-8 h-8 text-primary" />
@@ -449,14 +464,31 @@ export function BookingModal({ charger, onClose }: BookingModalProps) {
               </div>
             </div>
 
-            <div className="flex gap-2 mt-5">
+            {/* START CHARGING SESSION BUTTON */}
+            {canStartNow ? (
+              <button
+                onClick={() => { onClose(); navigate("/bookings"); }}
+                className="w-full mt-4 py-3.5 bg-gradient-to-r from-emerald-500 to-green-500 text-white font-bold rounded-xl text-[0.9375rem] flex items-center justify-center gap-2.5 shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all active:scale-[0.98]"
+              >
+                <BatteryCharging className="w-5 h-5" />
+                Start Charging Session Now
+              </button>
+            ) : (
+              <div className="w-full mt-4 py-3.5 bg-slate-100 text-slate-400 font-bold rounded-xl text-[0.85rem] flex items-center justify-center gap-2">
+                <Clock className="w-4 h-4" />
+                Session starts {isToday ? `at ${startTime}` : `on ${selectedDate.full}`}
+              </div>
+            )}
+
+            <div className="flex gap-2 mt-3">
               <button onClick={() => { onClose(); navigate("/bookings"); }}
-                className="flex-1 py-3 bg-primary hover:bg-emerald-600 text-white font-bold rounded-xl text-[0.875rem] transition-colors shadow-md">View Bookings</button>
+                className="flex-1 py-3 border border-primary text-primary font-bold rounded-xl text-[0.875rem] transition-colors hover:bg-primary/5">View Bookings</button>
               <button onClick={onClose}
                 className="flex-1 py-3 border border-slate-200 font-bold hover:bg-slate-50 rounded-xl text-[0.875rem] transition-colors">Done</button>
             </div>
           </div>
-        )}
+          );
+        })()}
       </div>
     </div>
   );

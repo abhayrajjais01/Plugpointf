@@ -224,6 +224,27 @@ export async function updateBookingStatus(
   if (error) console.error("updateBookingStatus:", error.message);
 }
 
+// Fetch all bookings made on chargers owned by a specific host
+export async function fetchHostBookings(hostId: string): Promise<Booking[]> {
+  // Step 1: Get all charger IDs owned by this host
+  const { data: chargerRows, error: chargerError } = await supabase
+    .from("chargers")
+    .select("id")
+    .eq("owner_id", hostId);
+  if (chargerError || !chargerRows || chargerRows.length === 0) return [];
+
+  const chargerIds = chargerRows.map((r: any) => r.id);
+
+  // Step 2: Fetch bookings on those chargers
+  const { data, error } = await supabase
+    .from("bookings")
+    .select("*")
+    .in("charger_id", chargerIds)
+    .order("created_at", { ascending: false });
+  if (error) { console.error("fetchHostBookings:", error.message); return []; }
+  return (data ?? []).map(mapBooking);
+}
+
 // ─── Reviews ──────────────────────────────────────────────────
 
 export async function fetchReviews(): Promise<Review[]> {

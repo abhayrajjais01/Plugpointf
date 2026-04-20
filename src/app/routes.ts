@@ -9,6 +9,7 @@ import { ProfilePage } from "./components/ProfilePage";
 import { AuthPage } from "./components/AuthPage";
 import { MessagesPage } from "./components/MessagesPage";
 import { ManageChargersPage } from "./components/ManageChargersPage";
+import { HostEarningsPage } from "./components/HostEarningsPage";
 
 export const router = createBrowserRouter([
   {
@@ -24,6 +25,7 @@ export const router = createBrowserRouter([
       { path: "auth", Component: AuthPage },
       { path: "messages", Component: MessagesPage },
       { path: "manage-chargers", Component: ManageChargersPage },
+      { path: "host-earnings", Component: HostEarningsPage },
     ],
   },
 ]);
