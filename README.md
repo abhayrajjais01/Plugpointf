@@ -21,7 +21,7 @@ Beyond simple scheduling, PlugPoint offers a sophisticated multi-modal booking s
 *   **Collision Prevention**: An absolute mathematical overlap engine checks Unix timestamps to prevent double-booking down to the minute.
 
 ### 3. 💰 Host Empowerment & Financials
-*   **Earnings Dashboard**: Hosts get a professional breakdown of Gross vs. Net earnings (after a 15% platform fee).
+*   **Earnings Dashboard**: Hosts get a professional breakdown of Gross vs. Net earnings (after a 5% platform fee).
 *   **Cashout to Wallet**: One-tap transfer of host earnings directly into the in-app wallet.
 *   **Dual-Tier Payments**: Native integration with **Razorpay** for direct payments and a custom **PlugPoint Wallet** for one-tap bookings.
 
@@ -106,7 +106,7 @@ npm run dev
 
 *   **Overlap Prevention**: Instead of array indexes, we use `startTime.getTime()` and `endTime.getTime()` boundaries to ensure non-conflicting reservations.
 *   **Dynamic Unit Calculation**: Energy projection ($kWh = \text{Duration (h)} \times \text{Charger Power (kW)}$).
-*   **Platform Fee Logic**: A hard-coded 15% platform commission is automatically deducted from host earnings calculations at the query layer.
+*   **Platform Fee Logic**: A 5% platform commission is automatically deducted from host earnings (Seller Side). No service fees are charged to the driver (Buyer Side).
 
 ---
 

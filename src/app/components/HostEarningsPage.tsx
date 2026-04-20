@@ -23,6 +23,7 @@ import { toast } from "sonner";
  * HOST EARNINGS PAGE
  * Shows total earnings from bookings on a host's listed chargers.
  * Hosts can see completed/pending earnings and request a cashout.
+ * **Platform Fee Logic**: A hard-coded 5% platform commission is automatically deducted from host earnings calculations at the query layer. No service fees are charged to the user.
  */
 export function HostEarningsPage() {
   const navigate = useNavigate();
@@ -31,8 +32,8 @@ export function HostEarningsPage() {
   const [loading, setLoading] = useState(true);
   const [cashingOut, setCashingOut] = useState(false);
 
-  // A 15% platform fee (simulated)
-  const PLATFORM_FEE_PERCENT = 15;
+  // A 5% platform fee (simulated)
+  const PLATFORM_FEE_PERCENT = 5;
 
   const userChargers = chargers.filter((c) => c.ownerId === user?.id);
   const isHost = userChargers.length > 0;

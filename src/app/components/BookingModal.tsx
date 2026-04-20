@@ -156,7 +156,7 @@ export function BookingModal({ charger, onClose }: BookingModalProps) {
 
   const finalUnitsKwh = Number((finalDurationHoursFloat * charger.power).toFixed(1));
   const subtotal = bookingMode === "amount" ? enteredAmount : (finalDurationHoursFloat * charger.pricePerHour);
-  const serviceFee = 10;
+  const serviceFee = 0;
   const total = Number((subtotal + serviceFee).toFixed(2));
 
   // Payment 
