@@ -46,8 +46,8 @@ export function Layout() {
   const hideHeader = isMapPage || isHomePage; // These pages have their own custom headers
 
   return (
-    // h-screen: makes the app exactly the height of the phone screen
-    <div className="flex flex-col h-screen bg-slate-50 selection:bg-primary/30">
+    // h-[100dvh]: makes the app exactly the height of the phone screen, accounting for address bars
+    <div className="flex flex-col h-[100dvh] bg-slate-50 selection:bg-primary/30">
       
       {/* ─── APP HEADER ─── */}
       {!hideHeader && (

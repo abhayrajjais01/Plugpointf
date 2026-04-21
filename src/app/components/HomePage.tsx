@@ -165,7 +165,7 @@ export function HomePage() {
                 <Zap className="w-5 h-5 text-emerald-400" />
               </div>
               <div>
-                <h1 className="text-white text-[1.1rem] tracking-tight" style={{ fontWeight: 800, fontSize: '1.1rem', lineHeight: 1.2 }}>
+                <h1 className="text-white text-[1.1rem] tracking-tight font-extrabold leading-tight">
                   PlugPoint
                 </h1>
                 <p className="text-white/40 text-[0.6rem] font-semibold uppercase tracking-widest">Peer-to-Peer Charging</p>
@@ -192,7 +192,7 @@ export function HomePage() {
 
           {/* Greeting & Stats */}
           <div className="px-5 pt-2 pb-4">
-            <h2 className="text-white text-[1.35rem]" style={{ fontWeight: 700, lineHeight: 1.25, fontSize: '1.35rem' }}>
+            <h2 className="text-white text-[1.35rem] font-bold leading-tight">
               Find your next
               <br />
               <span className="gradient-text">charging stop</span>
@@ -213,7 +213,6 @@ export function HomePage() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white text-sm text-slate-800 placeholder-slate-400 outline-none shadow-sm"
-                  style={{ fontSize: '13px' }}
                 />
                 {searchQuery && (
                   <button onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2">

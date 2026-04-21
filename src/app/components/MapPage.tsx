@@ -518,7 +518,7 @@ export function MapPage() {
 
         {/* Map/Trip/Social Navbar */}
         <div className="px-4 pb-3 pt-1 pointer-events-auto flex justify-center">
-          <div className="bg-white/10 backdrop-blur-md p-1 rounded-full flex items-center gap-1 w-full max-w-md border border-white/20">
+          <div className="bg-white/10 backdrop-blur-md p-1 rounded-full flex items-center gap-1 w-full max-w-lg border border-white/20">
             <button 
               onClick={() => setActiveNavTab('map')}
               className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-full text-xs font-bold transition-all ${activeNavTab === 'map' ? 'bg-white text-slate-900 shadow-md' : 'text-white hover:bg-white/10'}`}
@@ -558,7 +558,6 @@ export function MapPage() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onFocus={() => setShowSearchPanel(true)}
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white text-sm text-slate-800 placeholder-slate-400 outline-none border-none shadow-sm"
-                style={{ fontSize: '13px' }}
               />
             </div>
             <button
