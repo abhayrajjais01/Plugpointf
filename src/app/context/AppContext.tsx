@@ -55,7 +55,7 @@ interface AppState {
   topUpWallet: (amount: number, paymentId: string) => Promise<boolean>;
   payWithWallet: (amount: number, description: string) => Promise<boolean>;
   fetchPublicChargers: (lat: number, lng: number) => Promise<void>;
-  fetchPublicChargersForRoute: (polyline: string) => Promise<void>;
+  fetchPublicChargersForRoute: (polyline: string, distance?: number) => Promise<void>;
   isNavigating: boolean;
   setIsNavigating: React.Dispatch<React.SetStateAction<boolean>>;
   tripState: {
@@ -357,12 +357,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   // This is a special version that searches for chargers along a driving path (Polyline).
-  const fetchPublicChargersForRoute = async (polyline: string) => {
+  const fetchPublicChargersForRoute = async (polyline: string, distance: number = 5) => {
     try {
       const apiKey = (import.meta as any).env.VITE_OCM_API_KEY || '';
 
-      // We pass the 'polyline' string. The API finds chargers within 5 KM of that line.
-      const url = `https://api.openchargemap.io/v3/poi?output=json&polyline=${encodeURIComponent(polyline)}&distance=5&distanceunit=KM&maxresults=100` + (apiKey ? `&key=${apiKey}` : '');
+      // We pass the 'polyline' string. The API finds chargers within the specified detour distance.
+      const url = `https://api.openchargemap.io/v3/poi?output=json&polyline=${encodeURIComponent(polyline)}&distance=${distance}&distanceunit=KM&maxresults=500` + (apiKey ? `&key=${apiKey}` : '');
 
       const res = await fetch(url);
       if (!res.ok) return;

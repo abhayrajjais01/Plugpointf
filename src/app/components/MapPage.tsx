@@ -23,7 +23,8 @@ import {
   Users,
   Globe,
   Share2,
-  User
+  User,
+  ArrowLeft
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
@@ -87,6 +88,22 @@ function minDistanceFromChargerToRoute(charger: Charger, routeCoords: [number, n
   return minDistance;
 }
 
+// Helper to prevent OpenChargeMap API from failing due to URL lengths on very long trips (> 1000km)
+function getSimplifiedPolyline(coordinates: [number, number][], maxPoints = 150) {
+  if (coordinates.length <= maxPoints) return encodePolyline(coordinates);
+  
+  const step = Math.ceil(coordinates.length / maxPoints);
+  const sampled: [number, number][] = [];
+  for (let i = 0; i < coordinates.length; i += step) {
+    sampled.push(coordinates[i]);
+  }
+  // Ensure the final destination point is always included
+  if (sampled[sampled.length - 1] !== coordinates[coordinates.length - 1]) {
+    sampled.push(coordinates[coordinates.length - 1]);
+  }
+  return encodePolyline(sampled);
+}
+
 export function MapPage() {
   const { chargers, fetchPublicChargers, fetchPublicChargersForRoute, user, tripState, setTripState, isNavigating, setIsNavigating, evDetails } = useApp();
   const navigate = useNavigate();
@@ -106,6 +123,8 @@ export function MapPage() {
   const [showListView, setShowListView] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [isEvSetupOpen, setIsEvSetupOpen] = useState(false);
+  const [detourDistance, setDetourDistance] = useState<number>(5);
+  const [showDetourDropdown, setShowDetourDropdown] = useState(false);
 
   // --- REFS ---
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -129,7 +148,7 @@ export function MapPage() {
     let matchRoute = true;
     if (tripState.routeData && tripState.routeData.coordinates) {
       const dist = minDistanceFromChargerToRoute(c, tripState.routeData.coordinates);
-      matchRoute = dist <= 5;
+      matchRoute = dist <= detourDistance;
     }
 
     return matchConnector && matchAvailable && matchFast && matchRoute && matchSearch;
@@ -208,8 +227,8 @@ export function MapPage() {
       setActiveNavTab("map"); // Switch back to map to show the route
 
       // Fetch all public OCM chargers located along this driving polyline
-      const polylineStr = encodePolyline(geojsonData.coordinates);
-      fetchPublicChargersForRoute(polylineStr);
+      const polylineStr = getSimplifiedPolyline(geojsonData.coordinates);
+      fetchPublicChargersForRoute(polylineStr, detourDistance);
     } catch (err: any) {
       setTripState((s) => ({
         ...s,
@@ -491,33 +510,77 @@ export function MapPage() {
   return (
     <div className="relative h-full flex flex-col overflow-hidden bg-slate-50" style={{ marginTop: '-1px' }}>
       
-      {/* === DARK HEADER SECTION (Statiq-style) === */}
-      <div className="absolute top-0 left-0 right-0 z-30 flex flex-col pointer-events-none pb-6" style={{ background: 'linear-gradient(to bottom, rgba(15, 27, 45, 0.9) 0%, rgba(15, 27, 45, 0.5) 60%, rgba(15, 27, 45, 0) 100%)' }}>
+      {/* === DARK HEADER SECTION === */}
+      <div className="absolute top-0 left-0 right-0 z-30 flex flex-col pointer-events-none pb-6" style={{ background: (tripState.routeData && activeNavTab === "map") ? 'transparent' : 'linear-gradient(to bottom, rgba(15, 27, 45, 0.9) 0%, rgba(15, 27, 45, 0.5) 60%, rgba(15, 27, 45, 0) 100%)' }}>
         
-        {/* Top Row: Vehicle selector + Rewards + Profile */}
-        <div className="flex items-center justify-between px-4 pt-3 pb-2 pointer-events-auto">
-          {/* Vehicle / EV Selector */}
-          <button onClick={() => setIsEvSetupOpen(true)} className="flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-white/15 bg-white/5 backdrop-blur-sm hover:bg-white/10 transition-all active:scale-95">
-            <div className="w-5 h-5 rounded-full bg-primary/80 flex items-center justify-center">
-              <Zap className="w-3 h-3 text-white" />
-            </div>
-            <span className="text-white text-xs font-semibold tracking-tight">{evDetails ? evDetails.make : "My EV"}</span>
-            <ChevronDown className="w-3.5 h-3.5 text-white/50" />
-          </button>
+        {tripState.routeData && activeNavTab === "map" ? (
+          // --- ACTIVE ROUTE HEADER ---
+          <div className="flex items-center justify-between px-3 pt-12 pb-2 pointer-events-auto">
+             <button onClick={() => setTripState(s => ({...s, routeData: null}))} className="w-11 h-11 bg-white rounded-xl shadow-md flex items-center justify-center border border-slate-100 hover:bg-slate-50 transition-all active:scale-95">
+               <ArrowLeft className="w-5 h-5 text-slate-700" />
+             </button>
+             
+             <div className="flex items-center gap-2">
+                 <button onClick={() => setIsEvSetupOpen(true)} className="flex items-center gap-1.5 px-3 py-2.5 rounded-full border border-slate-200 bg-white shadow-md hover:bg-slate-50 transition-all active:scale-95">
+                   <Zap className="w-4 h-4 text-slate-400" />
+                   <span className="text-slate-400 text-xs font-semibold tracking-tight">{evDetails ? evDetails.make : "My EV"}</span>
+                   <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                 </button>
 
-          {/* Right side: Profile Badge */}
-          <div className="flex items-center gap-2.5">
-            <button
-              onClick={() => navigate('/profile')}
-              className="w-8 h-8 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center hover:bg-white/20 transition-all shadow-sm"
-            >
-              <User className="w-4 h-4 text-white" />
-            </button>
+                 <div className="relative">
+                   <button onClick={() => setShowDetourDropdown(!showDetourDropdown)} className="flex items-center gap-2 px-5 py-2.5 rounded-full border border-slate-200 bg-white shadow-md font-bold text-slate-800 text-sm hover:bg-slate-50 transition-all active:scale-95">
+                     Detour - {detourDistance}km
+                   </button>
+                   {showDetourDropdown && (
+                     <div className="absolute top-full left-0 mt-2 w-full bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
+                       {[2, 5, 10, 20, 50].map(d => (
+                         <button key={d} onClick={() => {
+                           setDetourDistance(d);
+                           setShowDetourDropdown(false);
+                           if (tripState.routeData) {
+                             const polylineStr = getSimplifiedPolyline(tripState.routeData.coordinates);
+                             fetchPublicChargersForRoute(polylineStr, d);
+                           }
+                         }} className={`w-full text-left px-5 py-3 text-sm transition-all ${detourDistance === d ? 'font-bold bg-blue-50 text-blue-600' : 'font-medium text-slate-600 hover:bg-slate-50'}`}>
+                           {d}km
+                         </button>
+                       ))}
+                     </div>
+                   )}
+                 </div>
+             </div>
+
+             <button className="w-11 h-11 bg-white rounded-xl shadow-md flex items-center justify-center border border-slate-100 hover:bg-slate-50 transition-all active:scale-95">
+               <ChevronDown className="w-5 h-5 text-slate-700" />
+             </button>
           </div>
-        </div>
+        ) : (
+          // --- DEFAULT MAP HEADER ---
+          <>
+            {/* Top Row: Vehicle selector + Rewards + Profile */}
+            <div className="flex items-center justify-between px-4 pt-3 pb-2 pointer-events-auto">
+              {/* Vehicle / EV Selector */}
+              <button onClick={() => setIsEvSetupOpen(true)} className="flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-white/15 bg-white/5 backdrop-blur-sm hover:bg-white/10 transition-all active:scale-95">
+                <div className="w-5 h-5 rounded-full bg-primary/80 flex items-center justify-center">
+                  <Zap className="w-3 h-3 text-white" />
+                </div>
+                <span className="text-white text-xs font-semibold tracking-tight">{evDetails ? evDetails.make : "My EV"}</span>
+                <ChevronDown className="w-3.5 h-3.5 text-white/50" />
+              </button>
 
-        {/* Map/Trip/Social Navbar */}
-        <div className="px-4 pb-3 pt-1 pointer-events-auto flex justify-center">
+              {/* Right side: Profile Badge */}
+              <div className="flex items-center gap-2.5">
+                <button
+                  onClick={() => navigate('/profile')}
+                  className="w-8 h-8 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center hover:bg-white/20 transition-all shadow-sm"
+                >
+                  <User className="w-4 h-4 text-white" />
+                </button>
+              </div>
+            </div>
+
+            {/* Map/Trip/Social Navbar */}
+            <div className="px-4 pb-3 pt-1 pointer-events-auto flex justify-center">
           <div className="bg-white/10 backdrop-blur-md p-1 rounded-full flex items-center gap-1 w-full max-w-lg border border-white/20">
             <button 
               onClick={() => setActiveNavTab('map')}
@@ -630,6 +693,8 @@ export function MapPage() {
           </div>
         )}
           </div>
+        )}
+          </>
         )}
       </div>
 
@@ -779,30 +844,85 @@ export function MapPage() {
         </div>
       )}
 
-      {/* --- START JOURNEY BUTTON --- */}
+  
+      {/* === BOTTOM ROUTE INFO SHEET & FLOATING CONTROLS === */}
       {activeNavTab === "map" && tripState.routeData && !isNavigating && (
-        <div className="absolute bottom-44 left-1/2 -translate-x-1/2 z-40 animate-in slide-in-from-bottom-8 flex gap-2">
-          <button 
-             onClick={() => {
-               setIsNavigating(true);
-               if (mapRef.current && userMarkerRef.current) {
-                 const location = userMarkerRef.current.getLngLat() || mapRef.current.getCenter();
-                 mapRef.current.flyTo({ center: location, zoom: 16, pitch: 45 });
-               }
-             }}
-             className="bg-blue-600 text-white px-8 py-3.5 rounded-full shadow-lg font-bold flex items-center gap-2 hover:bg-blue-700 transition-colors shadow-blue-600/20"
-          >
-            <Navigation className="w-5 h-5 fill-current" />
-            Start Journey
-          </button>
+        <div className="absolute bottom-0 left-0 right-0 z-30 animate-in slide-in-from-bottom flex flex-col items-center pointer-events-none mb-10 pb-2">
           
-          <button 
-            onClick={() => setTripState(s => ({ ...s, routeData: null }))}
-            className="bg-white text-slate-400 p-3.5 rounded-full shadow-lg border border-slate-100 hover:text-red-500 transition-colors"
-            title="Clear Route"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          {/* Controls overlapping top edge */}
+          <div className="w-full flex justify-between items-end px-4 -mb-9 relative z-40 pointer-events-none">
+            {/* Center Group (Start Journey + X) */}
+            <div className="flex-1 flex justify-center gap-3 pl-[3.5rem] pointer-events-auto">
+               <button 
+                  onClick={() => {
+                    setIsNavigating(true);
+                    if (mapRef.current && userMarkerRef.current) {
+                      const location = userMarkerRef.current.getLngLat() || mapRef.current.getCenter();
+                      mapRef.current.flyTo({ center: location, zoom: 16, pitch: 45 });
+                    }
+                  }}
+                  className="bg-[#1d4ed8] text-white px-8 py-4 rounded-[1.75rem] shadow-xl font-bold flex items-center justify-center gap-2.5 hover:bg-blue-800 transition-all active:scale-95"
+               >
+                 <Navigation className="w-5 h-5 fill-current rotate-45 -ml-1" />
+                 Start Journey
+               </button>
+               
+               <button 
+                 onClick={() => setTripState(s => ({ ...s, routeData: null }))}
+                 className="w-[3.5rem] h-[3.5rem] flex-shrink-0 bg-white text-slate-500 rounded-[1.75rem] shadow-xl border border-slate-100 flex items-center justify-center hover:text-red-500 transition-all active:scale-95"
+                 title="Clear Route"
+               >
+                 <X className="w-5 h-5" strokeWidth={2} />
+               </button>
+            </div>
+
+            {/* Right side Map Tools */}
+            <div className="flex flex-col gap-2 pointer-events-auto">
+              <button
+                onClick={centerOnUser}
+                className="w-[2.75rem] h-[2.75rem] bg-white rounded-xl shadow-lg flex items-center justify-center border border-slate-100 hover:bg-slate-50 transition-all active:scale-95"
+              >
+                <LocateFixed className="w-4.5 h-4.5 text-slate-700" />
+              </button>
+              <button
+                onClick={() => setShowListView(true)}
+                className="w-[2.75rem] h-[2.75rem] bg-white rounded-xl shadow-lg flex items-center justify-center border border-slate-100 hover:bg-slate-50 transition-all active:scale-95"
+              >
+                <List className="w-4.5 h-4.5 text-slate-700" />
+              </button>
+            </div>
+          </div>
+
+          {/* Card container */}
+          <div className="bg-white pointer-events-auto px-6 pt-11 pb-8 rounded-t-[2rem] shadow-[0_-8px_30px_rgb(0,0,0,0.08)] w-full relative z-30">
+             <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900 leading-tight mb-0.5 tracking-tight">
+                     Route Summary
+                  </h3>
+                  <p className="text-[0.8rem] text-slate-500 font-medium tracking-tight">via driving route</p>
+                  
+                  <div className="flex items-center gap-1.5 mt-2.5 text-slate-700 text-sm font-semibold">
+                    <span>{(tripState.routeData.coordinates.length * 0.05).toFixed(2)}km</span>
+                    <span className="text-slate-300">|</span>
+                    <span>{Math.round((tripState.routeData.coordinates.length * 0.05) / 60)}hr</span>
+                  </div>
+                  
+                  <p className="text-[#ea580c] text-[0.8rem] font-bold mt-1.5">
+                    {filtered.length} Charging Stops
+                  </p>
+                </div>
+                
+                {/* Right side Location Pin Icon like image */}
+                <div className="w-12 h-12 flex items-center justify-center relative mt-1">
+                   <div className="absolute w-8 h-8 rounded-full bg-red-100/50"></div>
+                   <MapPin className="w-8 h-8 text-red-500 fill-white relative z-10 drop-shadow-md" />
+                   <div className="absolute -top-1 -right-1 bg-[#ea580c] text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full z-20 border border-white">
+                      {filtered.length}
+                   </div>
+                </div>
+             </div>
+          </div>
         </div>
       )}
 
@@ -810,7 +930,7 @@ export function MapPage() {
       <div ref={mapContainerRef} className="flex-1 z-0" />
 
       {/* === FLOATING ACTION BUTTONS (Right side) === */}
-      {activeNavTab === "map" && (
+      {activeNavTab === "map" && !tripState.routeData && (
         <div className="absolute right-3 bottom-48 z-20 flex flex-col gap-2.5">
           {/* GPS Center Button */}
           <button
