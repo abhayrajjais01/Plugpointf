@@ -63,6 +63,8 @@ interface AppState {
     destination: string;
     isLoading: boolean;
     routeData: any | null;
+    distance: number | null;
+    duration: number | null;
     error: string | null;
   };
   setTripState: React.Dispatch<React.SetStateAction<{
@@ -70,6 +72,8 @@ interface AppState {
     destination: string;
     isLoading: boolean;
     routeData: any | null;
+    distance: number | null;
+    duration: number | null;
     error: string | null;
   }>>;
   evDetails: { make: string; model: string } | null;
@@ -107,6 +111,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     destination: "",
     isLoading: false,
     routeData: null,
+    distance: null,
+    duration: null,
     error: null,
   });
 

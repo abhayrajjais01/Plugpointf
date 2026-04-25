@@ -42,6 +42,24 @@ function mapCharger(row: any): Charger {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapBooking(row: any): Booking {
+  let computedStatus = row.status;
+
+  // Only auto-update logical time statuses (ignore manually cancelled ones)
+  if (computedStatus !== "cancelled") {
+    const now = new Date();
+    // Assuming row.date is "Apr 19, 2026" and row.end_time is "6:00 PM"
+    const startDateTime = new Date(`${row.date} ${row.start_time}`);
+    const endDateTime = new Date(`${row.date} ${row.end_time}`);
+
+    if (now > endDateTime) {
+      computedStatus = "completed";
+    } else if (now >= startDateTime && now <= endDateTime) {
+      computedStatus = "active";
+    } else {
+      computedStatus = "upcoming";
+    }
+  }
+
   return {
     id: row.id,
     chargerId: row.charger_id,
@@ -54,7 +72,7 @@ function mapBooking(row: any): Booking {
     endTime: row.end_time,
     duration: row.duration,
     totalCost: Number(row.total_cost),
-    status: row.status,
+    status: computedStatus,
     connectorType: row.connector_type,
     power: Number(row.power),
   };

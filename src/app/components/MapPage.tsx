@@ -24,7 +24,8 @@ import {
   Globe,
   Share2,
   User,
-  ArrowLeft
+  ArrowLeft,
+  Heart
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
@@ -104,6 +105,14 @@ function getSimplifiedPolyline(coordinates: [number, number][], maxPoints = 150)
   return encodePolyline(sampled);
 }
 
+// Helper to reliably format duration into hours and minutes
+function formatDuration(mins: number) {
+  const h = Math.floor(mins / 60);
+  const m = Math.round(mins % 60);
+  if (h > 0) return `${h}hr ${m > 0 ? m + 'min' : ''}`.trim();
+  return `${m}min`;
+}
+
 export function MapPage() {
   const { chargers, fetchPublicChargers, fetchPublicChargersForRoute, user, tripState, setTripState, isNavigating, setIsNavigating, evDetails } = useApp();
   const navigate = useNavigate();
@@ -125,12 +134,35 @@ export function MapPage() {
   const [isEvSetupOpen, setIsEvSetupOpen] = useState(false);
   const [detourDistance, setDetourDistance] = useState<number>(5);
   const [showDetourDropdown, setShowDetourDropdown] = useState(false);
+  const [destSuggestions, setDestSuggestions] = useState<any[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestionTimeout = useRef<NodeJS.Timeout | null>(null);
+
+  const handleDestinationChange = (val: string) => {
+    setTripState(s => ({...s, destination: val}));
+    if (val.length > 2) {
+      if (suggestionTimeout.current) clearTimeout(suggestionTimeout.current);
+      suggestionTimeout.current = setTimeout(async () => {
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(val + ", India")}&limit=4`);
+          const data = await res.json();
+          setDestSuggestions(data);
+          setShowSuggestions(true);
+        } catch(e) {}
+      }, 500);
+    } else {
+      setShowSuggestions(false);
+      setDestSuggestions([]);
+    }
+  };
 
   // --- REFS ---
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<{ [key: string]: maplibregl.Marker }>({});
   const userMarkerRef = useRef<maplibregl.Marker | null>(null);
+  const routeLabelRef = useRef<maplibregl.Marker | null>(null);
+  const exactLocationNameRef = useRef<string | null>(null);
   const hasInitializedNearest = useRef(false);
   const lastFetchedLocation = useRef<{ lat: number; lng: number } | null>(null);
   const cardScrollRef = useRef<HTMLDivElement>(null);
@@ -177,21 +209,18 @@ export function MapPage() {
       let originCoords: [number, number]; 
 
       // Resolve Origin (GPS or Text)
-      if (tripState.origin.toLowerCase() === "my location" || tripState.origin.trim() === "") {
-        try {
-          const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
-          });
-          originCoords = [pos.coords.longitude, pos.coords.latitude];
-          setTripState(s => ({ ...s, origin: "My Location" }));
-          
-          if (userMarkerRef.current) {
-            userMarkerRef.current.setLngLat([pos.coords.longitude, pos.coords.latitude]);
-          }
-        } catch (e) {
-          throw new Error("Could not get GPS location. Please allow location access or type an address.");
+      const isExactGpsMatch = exactLocationNameRef.current && tripState.origin === exactLocationNameRef.current;
+
+      if (tripState.origin.toLowerCase() === "my location" || tripState.origin.trim() === "" || isExactGpsMatch) {
+        if (userMarkerRef.current) {
+          const lngLat = userMarkerRef.current.getLngLat();
+          originCoords = [lngLat.lng, lngLat.lat];
+          // We keep the exact text they see on screen for origin
+        } else {
+          throw new Error("Could not detect location. Please explicitly type an address.");
         }
       } else {
+        exactLocationNameRef.current = null;
         const oRes = await fetch(
           `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
             tripState.origin + ", India"
@@ -223,12 +252,18 @@ export function MapPage() {
       }
 
       const geojsonData = routeData.routes[0].geometry;
-      setTripState((s) => ({ ...s, routeData: geojsonData, isLoading: false }));
-      setActiveNavTab("map"); // Switch back to map to show the route
-
-      // Fetch all public OCM chargers located along this driving polyline
-      const polylineStr = getSimplifiedPolyline(geojsonData.coordinates);
-      fetchPublicChargersForRoute(polylineStr, detourDistance);
+      const distance = routeData.routes[0].distance; // meters
+      const duration = routeData.routes[0].duration; // seconds
+      
+      setTripState((s) => ({ 
+        ...s, 
+        routeData: geojsonData, 
+        distance: distance / 1000, 
+        duration: duration / 60,
+        isLoading: false 
+      }));
+      // Switch back to map to show the route
+      setActiveNavTab("map"); 
     } catch (err: any) {
       setTripState((s) => ({
         ...s,
@@ -238,13 +273,41 @@ export function MapPage() {
     }
   };
 
+  // Refetch chargers dynamically if route data exists and the user alters the detourDistance logic
+  useEffect(() => {
+    if (tripState.routeData && detourDistance) {
+      const polylineStr = getSimplifiedPolyline(tripState.routeData.coordinates);
+      fetchPublicChargersForRoute(polylineStr, detourDistance);
+    }
+  }, [detourDistance, tripState.routeData]);
+
   const getGPSLocation = async () => {
-      setTripState(s => ({...s, origin: "Locating..."}));
+      setTripState(s => ({...s, origin: "Locating...", error: null}));
+
+      const reverseGeocode = async (lat: number, lon: number): Promise<string> => {
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
+          const data = await res.json();
+          const addr = data.address;
+          if (!addr) return "My Location";
+          return addr.neighbourhood || addr.suburb || addr.city_district || addr.city || addr.town || addr.village || data.display_name.split(",")[0] || "My Location";
+        } catch(e) {
+          return "My Location";
+        }
+      };
+
       try {
           const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
+            navigator.geolocation.getCurrentPosition(resolve, reject, { 
+                timeout: 10000, 
+                maximumAge: 60000, 
+                enableHighAccuracy: true 
+            });
           });
-          setTripState(s => ({...s, origin: "My Location"}));
+          const locName = await reverseGeocode(pos.coords.latitude, pos.coords.longitude);
+          setTripState(s => ({...s, origin: locName}));
+          exactLocationNameRef.current = locName;
+          
           if (userMarkerRef.current && mapRef.current) {
                userMarkerRef.current.setLngLat([pos.coords.longitude, pos.coords.latitude]);
                mapRef.current.flyTo({
@@ -253,7 +316,30 @@ export function MapPage() {
                });
           }
       } catch (e) {
-          setTripState(s => ({...s, origin: "", error: "Location permission denied"}));
+          // GPS Failed, try fetching rough IP-based location as fallback
+          try {
+             const res = await fetch("https://ipapi.co/json/");
+             if (!res.ok) throw new Error("IP API failed");
+             const data = await res.json();
+             if (data.latitude && data.longitude) {
+                 const locName = await reverseGeocode(data.latitude, data.longitude);
+                 const finalLocName = locName !== "My Location" ? locName : (data.city || "My Location");
+                 setTripState(s => ({...s, origin: finalLocName}));
+                 exactLocationNameRef.current = finalLocName;
+
+                 if (userMarkerRef.current && mapRef.current) {
+                      userMarkerRef.current.setLngLat([data.longitude, data.latitude]);
+                      mapRef.current.flyTo({
+                        center: [data.longitude, data.latitude],
+                        zoom: 12, // zoom out a bit since IP is inaccurate
+                      });
+                 }
+             } else {
+                 throw new Error("No IP location Data");
+             }
+          } catch(fallbackErr) {
+             setTripState(s => ({...s, origin: "", error: "Could not track location. Please explicitly type an address."}));
+          }
       }
   };
 
@@ -389,8 +475,14 @@ export function MapPage() {
     if (!mapRef.current || !mapRef.current.isStyleLoaded()) return;
     const map = mapRef.current;
 
+    // Cleanup
     if (map.getLayer('route')) map.removeLayer('route');
+    if (map.getLayer('detour-border')) map.removeLayer('detour-border');
     if (map.getSource('route')) map.removeSource('route');
+    if (routeLabelRef.current) {
+      routeLabelRef.current.remove();
+      routeLabelRef.current = null;
+    }
 
     if (tripState.routeData) {
       map.addSource('route', {
@@ -401,30 +493,65 @@ export function MapPage() {
           'geometry': tripState.routeData
         }
       });
+
+      // 1. Detour Border (The "Orange Border" denoting detour area)
+      const detourBorderWidth = Math.max(12, (detourDistance / 5) * 24);
+      // Decrease opacity as width increases to prevent stacking from turning the route into a dark solid orange polygon
+      const detourBorderOpacity = Math.min(0.2, Math.max(0.04, 0.15 * (5 / detourDistance)));
+
+      map.addLayer({
+        'id': 'detour-border',
+        'type': 'line',
+        'source': 'route',
+        'layout': { 'line-join': 'round', 'line-cap': 'round' },
+        'paint': {
+          'line-color': '#f97316',
+          'line-width': detourBorderWidth,
+          'line-opacity': detourBorderOpacity
+        }
+      });
+
+      // 2. Main Route Line
       map.addLayer({
         'id': 'route',
         'type': 'line',
         'source': 'route',
-        'layout': {
-          'line-join': 'round',
-          'line-cap': 'round'
-        },
+        'layout': { 'line-join': 'round', 'line-cap': 'round' },
         'paint': {
           'line-color': '#2563eb',
           'line-width': 6,
-          'line-opacity': 0.8
+          'line-opacity': 0.9
         }
       });
 
-      // Fit bounds
+      // 3. Midpoint Label (Time to reach + Charger count)
       const coords = tripState.routeData.coordinates;
+      const midIdx = Math.floor(coords.length / 2);
+      const midCoord = coords[midIdx];
+
+      const labelEl = document.createElement('div');
+      labelEl.className = 'route-label-popup';
+      labelEl.innerHTML = `
+        <div style="background: white; padding: 6px 12px; border-radius: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border: 1px solid #e2e8f0; display: flex; align-items: center; gap: 6px; white-space: nowrap;">
+          <div style="width: 8px; height: 8px; background: #2563eb; rounded: 50%;"></div>
+          <span style="font-size: 11px; font-weight: 800; color: #0f172a;">${formatDuration(tripState.duration || 0)}</span>
+          <div style="width: 1px; height: 10px; background: #e2e8f0;"></div>
+          <span style="font-size: 11px; font-weight: 800; color: #ea580c;">${filtered.length} Chargers</span>
+        </div>
+      `;
+
+      routeLabelRef.current = new maplibregl.Marker({ element: labelEl })
+        .setLngLat(midCoord)
+        .addTo(map);
+
+      // Fit bounds
       const bounds = coords.reduce((acc: maplibregl.LngLatBounds, coord: [number, number]) => {
         return acc.extend(coord);
       }, new maplibregl.LngLatBounds(coords[0], coords[0]));
       
-      map.fitBounds(bounds, { padding: 50 });
+      map.fitBounds(bounds, { padding: 100 });
     }
-  }, [tripState.routeData]);
+  }, [tripState.routeData, filtered.length, detourDistance]);
 
   // Marker Management
   useEffect(() => {
@@ -511,9 +638,57 @@ export function MapPage() {
     <div className="relative h-full flex flex-col overflow-hidden bg-slate-50" style={{ marginTop: '-1px' }}>
       
       {/* === DARK HEADER SECTION === */}
-      <div className="absolute top-0 left-0 right-0 z-30 flex flex-col pointer-events-none pb-6" style={{ background: (tripState.routeData && activeNavTab === "map") ? 'transparent' : 'linear-gradient(to bottom, rgba(15, 27, 45, 0.9) 0%, rgba(15, 27, 45, 0.5) 60%, rgba(15, 27, 45, 0) 100%)' }}>
+      <div className="absolute top-0 left-0 right-0 z-30 flex flex-col pointer-events-none pb-6" style={{ background: (tripState.routeData && activeNavTab === "map") || activeNavTab === "trip" ? 'transparent' : 'linear-gradient(to bottom, rgba(15, 27, 45, 0.9) 0%, rgba(15, 27, 45, 0.5) 60%, rgba(15, 27, 45, 0) 100%)' }}>
         
-        {tripState.routeData && activeNavTab === "map" ? (
+        {activeNavTab === "trip" && !tripState.routeData ? (
+          // --- NEW TRIP HEADER ---
+          <div className="flex flex-col">
+            <div className="flex items-center justify-between px-3 pt-3 pb-2 pointer-events-auto">
+               <div className="flex items-center gap-2">
+                   <button onClick={() => setIsEvSetupOpen(true)} className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-white shadow-sm hover:bg-slate-50 transition-all font-bold text-slate-800 text-[13px]">
+                     <div className="w-5 h-5 bg-slate-100 rounded-full flex items-center justify-center">
+                        <Zap className="w-3 h-3 text-slate-600" />
+                     </div>
+                     <span>{evDetails ? evDetails.make : "MG Cyberster"} <ChevronDown className="w-3.5 h-3.5 inline text-slate-400" /></span>
+                   </button>
+                   
+                   <button disabled className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white opacity-90 shadow-sm font-semibold text-slate-400/80 text-[13px]">
+                     Detour - 5km
+                   </button>
+               </div>
+               <button onClick={() => setActiveNavTab('map')} className="w-[42px] h-[42px] bg-[#0c182a] rounded-xl shadow-md flex items-center justify-center active:scale-95 transition-all">
+                 <Heart className="w-5 h-5 text-white stroke-2" />
+               </button>
+            </div>
+            
+            {/* Soft global toggle */}
+            <div className="px-4 pb-3 pt-1 pointer-events-auto flex justify-center opacity-90 hover:opacity-100 transition-opacity">
+              <div className="bg-white/90 backdrop-blur-md p-1 rounded-full flex items-center gap-1 w-full max-w-lg border border-slate-200 shadow-sm">
+                <button 
+                  onClick={() => setActiveNavTab('map')}
+                  className="flex-1 flex items-center justify-center gap-2 py-2 rounded-full text-xs font-bold transition-all text-slate-600 hover:bg-slate-100"
+                >
+                  <MapPin className="w-3.5 h-3.5" />
+                  Map
+                </button>
+                <button 
+                  onClick={() => setActiveNavTab('trip')}
+                  className="flex-1 flex items-center justify-center gap-2 py-2 rounded-full text-xs font-bold transition-all bg-slate-800 text-white shadow-md cursor-default"
+                >
+                  <Navigation className="w-3.5 h-3.5" />
+                  Trip
+                </button>
+                <button 
+                  onClick={() => setActiveNavTab('social')}
+                  className="flex-1 flex items-center justify-center gap-2 py-2 rounded-full text-xs font-bold transition-all text-slate-600 hover:bg-slate-100"
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  Social
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : tripState.routeData && activeNavTab === "map" ? (
           // --- ACTIVE ROUTE HEADER ---
           <div className="flex items-center justify-between px-3 pt-12 pb-2 pointer-events-auto">
              <button onClick={() => setTripState(s => ({...s, routeData: null}))} className="w-11 h-11 bg-white rounded-xl shadow-md flex items-center justify-center border border-slate-100 hover:bg-slate-50 transition-all active:scale-95">
@@ -581,30 +756,30 @@ export function MapPage() {
 
             {/* Map/Trip/Social Navbar */}
             <div className="px-4 pb-3 pt-1 pointer-events-auto flex justify-center">
-          <div className="bg-white/10 backdrop-blur-md p-1 rounded-full flex items-center gap-1 w-full max-w-lg border border-white/20">
-            <button 
-              onClick={() => setActiveNavTab('map')}
-              className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-full text-xs font-bold transition-all ${activeNavTab === 'map' ? 'bg-white text-slate-900 shadow-md' : 'text-white hover:bg-white/10'}`}
-            >
-              <MapPin className="w-3.5 h-3.5" />
-              Map
-            </button>
-            <button 
-              onClick={() => setActiveNavTab('trip')}
-              className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-full text-xs font-bold transition-all ${activeNavTab === 'trip' ? 'bg-white text-slate-900 shadow-md' : 'text-white hover:bg-white/10'}`}
-            >
-              <Navigation className="w-3.5 h-3.5" />
-              Trip
-            </button>
-            <button 
-              onClick={() => setActiveNavTab('social')}
-              className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-full text-xs font-bold transition-all ${activeNavTab === 'social' ? 'bg-white text-slate-900 shadow-md' : 'text-white hover:bg-white/10'}`}
-            >
-              <Users className="w-3.5 h-3.5" />
-              Social
-            </button>
-          </div>
-        </div>
+              <div className="bg-white/10 backdrop-blur-md p-1 rounded-full flex items-center gap-1 w-full max-w-lg border border-white/20">
+                <button 
+                  onClick={() => setActiveNavTab('map')}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-full text-xs font-bold transition-all ${activeNavTab === 'map' ? 'bg-white text-slate-900 shadow-md' : 'text-white hover:bg-white/10'}`}
+                >
+                  <MapPin className="w-3.5 h-3.5" />
+                  Map
+                </button>
+                <button 
+                  onClick={() => setActiveNavTab('trip')}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-full text-xs font-bold transition-all ${activeNavTab === 'trip' ? 'bg-white text-slate-900 shadow-md' : 'text-white hover:bg-white/10'}`}
+                >
+                  <Navigation className="w-3.5 h-3.5" />
+                  Trip
+                </button>
+                <button 
+                  onClick={() => setActiveNavTab('social')}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-full text-xs font-bold transition-all ${activeNavTab === 'social' ? 'bg-white text-slate-900 shadow-md' : 'text-white hover:bg-white/10'}`}
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  Social
+                </button>
+              </div>
+            </div>
 
         {/* Dynamic Content based on Active Tab */}
         {activeNavTab === "map" && (
@@ -757,66 +932,85 @@ export function MapPage() {
         </div>
       )}
 
-      {/* === TRIP PLANNING PANEL (slides under header) === */}
-      {activeNavTab === "trip" && (
-        <div className="absolute top-[calc(100px+4.5rem)] left-3 right-3 z-40 animate-in fade-in slide-in-from-top-4">
-          <div className="bg-white/95 backdrop-blur-md p-4 rounded-2xl shadow-xl border border-white/20 flex flex-col gap-3 w-full max-w-sm">
-            <div className="flex items-center justify-between">
-               <h3 className="font-bold text-[0.875rem] flex items-center gap-2">
-                   <div className="w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center">
-                     <Navigation className="w-4 h-4 text-blue-600"/>
-                   </div>
-                   Plan your trip
-               </h3>
-            </div>
+      {/* === TRIP PLANNING PANEL (Bottom Sheet matches Image) === */}
+      {activeNavTab === "trip" && !tripState.routeData && (
+        <div className="absolute bottom-0 left-0 right-0 z-40 animate-in slide-in-from-bottom pointer-events-none">
+          <div className="bg-white pointer-events-auto px-4 pt-4 pb-4 rounded-t-[1.25rem] shadow-[0_-8px_30px_rgb(0,0,0,0.08)] w-full relative">
+            <h2 className="text-[#0f172a] text-base font-bold mb-0.5 tracking-tight flex items-center gap-2">
+              Plan your next trip
+            </h2>
+            <p className="text-[11px] text-slate-500 leading-tight mb-3 tracking-wide font-medium">
+              Tackle your range anxiety with our hassle - free charging experience on your next trip.
+            </p>
             
-            <div className="relative flex flex-col gap-2">
-              <div className="absolute left-[1.125rem] top-5 bottom-5 w-0.5 bg-slate-100 -z-0"></div>
+            <div className="relative pl-[0.65rem] mb-3">
+              {/* Vertical Dashed Line */}
+              <div className="absolute left-[0.7rem] top-[0.9rem] bottom-[0.9rem] w-0 border-l-[1.5px] border-dashed border-slate-300 pointer-events-none"></div>
               
-              <div className="flex items-center gap-3 z-10 relative">
-                <div className="w-3 h-3 bg-blue-500 rounded-full ml-0.5 ring-4 ring-white shadow-sm"></div>
-                <div className="flex-1 relative">
+              <div className="flex flex-col gap-1.5">
+                <div className="relative flex items-center">
+                  {/* Top dot */}
+                  <div className="absolute -left-[0.45rem] w-1.5 h-1.5 rounded-full border-[1.5px] border-slate-300 bg-white z-10 box-content"></div>
                   <input 
                     type="text" 
-                    placeholder="Origin" 
+                    placeholder="Enter Location" 
                     value={tripState.origin}
-                    onChange={(e) => setTripState(s => ({...s, origin: e.target.value}))}
-                    className="w-full text-[0.8125rem] px-4 py-2.5 bg-slate-50 rounded-xl border-none focus:ring-2 focus:ring-blue-500 transition-all"
+                    onChange={(e) => {
+                       const val = e.target.value;
+                       setTripState(s => ({...s, origin: val}));
+                       if (exactLocationNameRef.current && val !== exactLocationNameRef.current) {
+                           exactLocationNameRef.current = null;
+                       }
+                    }}
+                    className="w-full text-xs ml-2.5 font-bold text-slate-700 px-3 py-2 bg-white border-[1.5px] border-slate-200/50 rounded-lg shadow-[0_2px_10px_rgb(0,0,0,0.02)] focus:ring-2 focus:ring-slate-200 transition-all outline-none placeholder:text-slate-300 placeholder:font-semibold"
                   />
-                  <button onClick={getGPSLocation} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-blue-600 transition-opacity">
-                    <LocateFixed className="w-4 h-4" />
+                  <button onClick={getGPSLocation} className="absolute right-2 p-1 transition-all active:scale-95 text-[#0f172a] opacity-80 hover:opacity-100">
+                    <LocateFixed className="w-3.5 h-3.5" />
                   </button>
                 </div>
-              </div>
 
-              <div className="flex items-center gap-3 z-10 relative">
-                <div className="w-3 h-3 bg-rose-500 rounded-full ml-0.5 ring-4 ring-white shadow-sm"></div>
-                <input 
-                  type="text" 
-                  placeholder="Destination (e.g. Mysore)" 
-                  value={tripState.destination}
-                  onChange={(e) => setTripState(s => ({...s, destination: e.target.value}))}
-                  className="w-full text-[0.8125rem] px-4 py-2.5 bg-slate-50 rounded-xl border-none focus:ring-2 focus:ring-rose-500 transition-all"
-                />
+                <div className="relative flex items-center">
+                  {/* Bottom dot */}
+                  <div className="absolute -left-[0.45rem] w-1.5 h-1.5 rounded-full border-[1.5px] border-slate-300 bg-white z-10 box-content"></div>
+                  <input 
+                    type="text" 
+                    placeholder="Enter Destination" 
+                    value={tripState.destination}
+                    onChange={(e) => handleDestinationChange(e.target.value)}
+                    onFocus={() => { if (destSuggestions.length > 0) setShowSuggestions(true); }}
+                    className="w-full text-xs ml-2.5 font-bold text-slate-700 px-3 py-2 bg-white border-[1.5px] border-slate-200/50 rounded-lg shadow-[0_2px_10px_rgb(0,0,0,0.02)] focus:ring-2 focus:ring-slate-200 transition-all outline-none placeholder:text-slate-300 placeholder:font-semibold"
+                  />
+                  {/* Autocomplete Dropdown */}
+                  {showSuggestions && destSuggestions.length > 0 && (
+                    <div className="absolute top-full left-[0.6rem] right-0 mt-1 bg-white border border-slate-100 rounded-lg shadow-[0_4px_20px_rgb(0,0,0,0.08)] z-50 overflow-hidden">
+                      {destSuggestions.map((item, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => {
+                            setTripState(s => ({ ...s, destination: item.display_name.split(",")[0] }));
+                            setShowSuggestions(false);
+                          }}
+                          className="w-full text-left px-3 py-2.5 text-[10.5px] font-bold text-slate-600 hover:bg-slate-50 border-b border-slate-50 last:border-0 truncate flex items-center gap-2 transition-colors"
+                        >
+                          <MapPin className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                          <span className="truncate">{item.display_name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
+
+            {tripState.error && <p className="text-red-500 text-[10px] mt-0.5 mb-1.5 font-semibold px-1">{tripState.error}</p>}
             
-            {tripState.error && <p className="text-red-500 text-[0.75rem] px-1">{tripState.error}</p>}
-            
-            <div className="flex gap-2 mt-1">
-              <button 
-                onClick={calculateTrip}
-                disabled={tripState.isLoading}
-                className="flex-1 bg-black text-white font-semibold py-3 rounded-xl text-[0.875rem] hover:bg-slate-800 active:scale-95 transition-all flex items-center justify-center gap-2"
-              >
-                {tripState.isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Plan Route"}
-              </button>
-              {tripState.routeData && (
-                <button onClick={() => setTripState(s => ({ ...s, routeData: null }))} className="p-3 bg-slate-100 rounded-xl hover:bg-slate-200">
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </div>
+            <button 
+              onClick={calculateTrip}
+              disabled={tripState.isLoading || (!tripState.origin && !tripState.destination)}
+              className="w-full mt-0.5 bg-[#0c182a] text-white font-bold py-2.5 rounded-lg text-xs flex items-center justify-center gap-2 hover:bg-slate-800 transition-colors active:scale-95 shadow-md disabled:bg-slate-100 disabled:text-slate-400"
+            >
+              {tripState.isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Plan Trip"}
+            </button>
           </div>
         </div>
       )}
@@ -847,10 +1041,10 @@ export function MapPage() {
   
       {/* === BOTTOM ROUTE INFO SHEET & FLOATING CONTROLS === */}
       {activeNavTab === "map" && tripState.routeData && !isNavigating && (
-        <div className="absolute bottom-0 left-0 right-0 z-30 animate-in slide-in-from-bottom flex flex-col items-center pointer-events-none mb-10 pb-2">
+        <div className="absolute bottom-0 left-0 right-0 z-30 animate-in slide-in-from-bottom flex flex-col items-center pointer-events-none">
           
           {/* Controls overlapping top edge */}
-          <div className="w-full flex justify-between items-end px-4 -mb-9 relative z-40 pointer-events-none">
+          <div className="w-full flex justify-between items-end px-4 relative z-40 pointer-events-none -mb-9">
             {/* Center Group (Start Journey + X) */}
             <div className="flex-1 flex justify-center gap-3 pl-[3.5rem] pointer-events-auto">
                <button 
@@ -894,7 +1088,7 @@ export function MapPage() {
           </div>
 
           {/* Card container */}
-          <div className="bg-white pointer-events-auto px-6 pt-11 pb-8 rounded-t-[2rem] shadow-[0_-8px_30px_rgb(0,0,0,0.08)] w-full relative z-30">
+          <div className="bg-white pointer-events-auto px-6 pt-11 pb-4 rounded-t-[2rem] shadow-[0_-8px_30px_rgb(0,0,0,0.08)] w-full relative z-30">
              <div className="flex items-start justify-between">
                 <div>
                   <h3 className="text-xl font-bold text-slate-900 leading-tight mb-0.5 tracking-tight">
@@ -903,9 +1097,9 @@ export function MapPage() {
                   <p className="text-[0.8rem] text-slate-500 font-medium tracking-tight">via driving route</p>
                   
                   <div className="flex items-center gap-1.5 mt-2.5 text-slate-700 text-sm font-semibold">
-                    <span>{(tripState.routeData.coordinates.length * 0.05).toFixed(2)}km</span>
+                    <span>{tripState.distance?.toFixed(2)}km</span>
                     <span className="text-slate-300">|</span>
-                    <span>{Math.round((tripState.routeData.coordinates.length * 0.05) / 60)}hr</span>
+                    <span>{formatDuration(tripState.duration || 0)}</span>
                   </div>
                   
                   <p className="text-[#ea580c] text-[0.8rem] font-bold mt-1.5">
@@ -953,8 +1147,8 @@ export function MapPage() {
       )}
 
       {/* === BOTTOM STATION CARDS (Horizontally Scrollable) === */}
-      {activeNavTab === "map" && (
-        <div className="absolute bottom-2 left-0 right-0 z-20">
+      {activeNavTab === "map" && (!tripState.routeData || isNavigating) && (
+        <div className="absolute bottom-2 left-0 right-0 z-20 transition-all duration-300">
         <div 
           ref={cardScrollRef}
           className="flex gap-3 overflow-x-auto no-scrollbar px-3 pb-2 snap-x snap-mandatory"

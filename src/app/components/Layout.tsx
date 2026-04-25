@@ -51,7 +51,7 @@ export function Layout() {
       
       {/* ─── APP HEADER ─── */}
       {!hideHeader && (
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100 px-5 py-3.5 flex items-center justify-between">
+      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100 px-5 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2.5 cursor-pointer active:scale-95 transition-transform" onClick={() => navigate("/")}>
           {/* Main Logo Icon */}
           <div className="w-8 h-8 bg-primary rounded-xl flex items-center justify-center shadow-md shadow-primary/20">
@@ -66,7 +66,7 @@ export function Layout() {
         {isAuthenticated ? (
           <button
             onClick={() => navigate("/profile")}
-            className="w-9 h-9 rounded-full flex items-center justify-center hover:opacity-80 transition-opacity active:scale-95"
+            className="w-8 h-8 rounded-full flex items-center justify-center hover:opacity-80 transition-opacity active:scale-95"
           >
             {user?.avatar && !avatarError ? (
               <img 
@@ -77,7 +77,7 @@ export function Layout() {
               />
             ) : (
               <div className="w-full h-full rounded-full bg-primary/10 flex items-center justify-center">
-                <User className="w-5 h-5 text-primary" />
+                <User className="w-4 h-4 text-primary" />
               </div>
             )}
           </button>
@@ -105,7 +105,7 @@ export function Layout() {
       {/* Only show if we are NOT on a special page that hides it */}
       {!hideNavBar && (
         <nav className="sticky bottom-0 z-50 bg-white/95 backdrop-blur-2xl border-t border-slate-100/80 nav-shadow">
-        <div className="flex items-center justify-around max-w-lg mx-auto py-1.5 px-1">
+        <div className="flex items-center justify-around max-w-lg mx-auto py-1 px-1">
           {navItems.map((item) => {
             // Check if this nav item matches the current page we are on
             const isActive =
@@ -119,20 +119,20 @@ export function Layout() {
               <button
                 key={item.path}
                 onClick={() => navigate(item.path)}
-                className={`flex flex-col items-center justify-center py-2 px-3 min-w-[4rem] rounded-2xl transition-all duration-200 relative ${
+                className={`flex flex-col items-center justify-center py-1.5 px-2 min-w-[3.5rem] rounded-2xl transition-all duration-200 relative ${
                   isPlusButton ? "" : isActive ? "text-primary" : "text-slate-400 hover:text-slate-500"
                 }`}
               >
                 {/* Special design for the 'List Charger' button */}
                 {isPlusButton ? (
-                  <div className="w-12 h-12 -mt-7 rounded-2xl p-0.5 bg-gradient-to-br from-primary to-emerald-400 shadow-lg shadow-primary/25">
-                    <div className="w-full h-full bg-primary rounded-[14px] flex items-center justify-center active:scale-90 transition-transform">
-                      <Icon className="w-5 h-5 text-white" />
+                  <div className="w-[2.75rem] h-[2.75rem] -mt-6 rounded-[14px] p-[1.5px] bg-gradient-to-br from-primary to-emerald-400 shadow-lg shadow-primary/25">
+                    <div className="w-full h-full bg-primary rounded-[12px] flex items-center justify-center active:scale-90 transition-transform">
+                      <Icon className="w-4.5 h-4.5 text-white" />
                     </div>
                   </div>
                 ) : (
                   <div className="relative">
-                    <Icon className={`w-[22px] h-[22px] transition-all duration-200 ${
+                    <Icon className={`w-[20px] h-[20px] transition-all duration-200 ${
                       isActive ? "stroke-[2.5px]" : "stroke-[1.8px]"
                     }`} />
                     {/* Active indicator dot */}
