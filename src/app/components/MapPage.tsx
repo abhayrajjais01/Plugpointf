@@ -105,6 +105,14 @@ function getSimplifiedPolyline(coordinates: [number, number][], maxPoints = 150)
   return encodePolyline(sampled);
 }
 
+// Helper to reliably format duration into hours and minutes
+function formatDuration(mins: number) {
+  const h = Math.floor(mins / 60);
+  const m = Math.round(mins % 60);
+  if (h > 0) return `${h}hr ${m > 0 ? m + 'min' : ''}`.trim();
+  return `${m}min`;
+}
+
 export function MapPage() {
   const { chargers, fetchPublicChargers, fetchPublicChargersForRoute, user, tripState, setTripState, isNavigating, setIsNavigating, evDetails } = useApp();
   const navigate = useNavigate();
@@ -153,6 +161,7 @@ export function MapPage() {
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<{ [key: string]: maplibregl.Marker }>({});
   const userMarkerRef = useRef<maplibregl.Marker | null>(null);
+  const routeLabelRef = useRef<maplibregl.Marker | null>(null);
   const exactLocationNameRef = useRef<string | null>(null);
   const hasInitializedNearest = useRef(false);
   const lastFetchedLocation = useRef<{ lat: number; lng: number } | null>(null);
@@ -243,12 +252,18 @@ export function MapPage() {
       }
 
       const geojsonData = routeData.routes[0].geometry;
-      setTripState((s) => ({ ...s, routeData: geojsonData, isLoading: false }));
-      setActiveNavTab("map"); // Switch back to map to show the route
-
-      // Fetch all public OCM chargers located along this driving polyline
-      const polylineStr = getSimplifiedPolyline(geojsonData.coordinates);
-      fetchPublicChargersForRoute(polylineStr, detourDistance);
+      const distance = routeData.routes[0].distance; // meters
+      const duration = routeData.routes[0].duration; // seconds
+      
+      setTripState((s) => ({ 
+        ...s, 
+        routeData: geojsonData, 
+        distance: distance / 1000, 
+        duration: duration / 60,
+        isLoading: false 
+      }));
+      // Switch back to map to show the route
+      setActiveNavTab("map"); 
     } catch (err: any) {
       setTripState((s) => ({
         ...s,
@@ -257,6 +272,14 @@ export function MapPage() {
       }));
     }
   };
+
+  // Refetch chargers dynamically if route data exists and the user alters the detourDistance logic
+  useEffect(() => {
+    if (tripState.routeData && detourDistance) {
+      const polylineStr = getSimplifiedPolyline(tripState.routeData.coordinates);
+      fetchPublicChargersForRoute(polylineStr, detourDistance);
+    }
+  }, [detourDistance, tripState.routeData]);
 
   const getGPSLocation = async () => {
       setTripState(s => ({...s, origin: "Locating...", error: null}));
@@ -452,8 +475,14 @@ export function MapPage() {
     if (!mapRef.current || !mapRef.current.isStyleLoaded()) return;
     const map = mapRef.current;
 
+    // Cleanup
     if (map.getLayer('route')) map.removeLayer('route');
+    if (map.getLayer('detour-border')) map.removeLayer('detour-border');
     if (map.getSource('route')) map.removeSource('route');
+    if (routeLabelRef.current) {
+      routeLabelRef.current.remove();
+      routeLabelRef.current = null;
+    }
 
     if (tripState.routeData) {
       map.addSource('route', {
@@ -464,30 +493,65 @@ export function MapPage() {
           'geometry': tripState.routeData
         }
       });
+
+      // 1. Detour Border (The "Orange Border" denoting detour area)
+      const detourBorderWidth = Math.max(12, (detourDistance / 5) * 24);
+      // Decrease opacity as width increases to prevent stacking from turning the route into a dark solid orange polygon
+      const detourBorderOpacity = Math.min(0.2, Math.max(0.04, 0.15 * (5 / detourDistance)));
+
+      map.addLayer({
+        'id': 'detour-border',
+        'type': 'line',
+        'source': 'route',
+        'layout': { 'line-join': 'round', 'line-cap': 'round' },
+        'paint': {
+          'line-color': '#f97316',
+          'line-width': detourBorderWidth,
+          'line-opacity': detourBorderOpacity
+        }
+      });
+
+      // 2. Main Route Line
       map.addLayer({
         'id': 'route',
         'type': 'line',
         'source': 'route',
-        'layout': {
-          'line-join': 'round',
-          'line-cap': 'round'
-        },
+        'layout': { 'line-join': 'round', 'line-cap': 'round' },
         'paint': {
           'line-color': '#2563eb',
           'line-width': 6,
-          'line-opacity': 0.8
+          'line-opacity': 0.9
         }
       });
 
-      // Fit bounds
+      // 3. Midpoint Label (Time to reach + Charger count)
       const coords = tripState.routeData.coordinates;
+      const midIdx = Math.floor(coords.length / 2);
+      const midCoord = coords[midIdx];
+
+      const labelEl = document.createElement('div');
+      labelEl.className = 'route-label-popup';
+      labelEl.innerHTML = `
+        <div style="background: white; padding: 6px 12px; border-radius: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border: 1px solid #e2e8f0; display: flex; align-items: center; gap: 6px; white-space: nowrap;">
+          <div style="width: 8px; height: 8px; background: #2563eb; rounded: 50%;"></div>
+          <span style="font-size: 11px; font-weight: 800; color: #0f172a;">${formatDuration(tripState.duration || 0)}</span>
+          <div style="width: 1px; height: 10px; background: #e2e8f0;"></div>
+          <span style="font-size: 11px; font-weight: 800; color: #ea580c;">${filtered.length} Chargers</span>
+        </div>
+      `;
+
+      routeLabelRef.current = new maplibregl.Marker({ element: labelEl })
+        .setLngLat(midCoord)
+        .addTo(map);
+
+      // Fit bounds
       const bounds = coords.reduce((acc: maplibregl.LngLatBounds, coord: [number, number]) => {
         return acc.extend(coord);
       }, new maplibregl.LngLatBounds(coords[0], coords[0]));
       
-      map.fitBounds(bounds, { padding: 50 });
+      map.fitBounds(bounds, { padding: 100 });
     }
-  }, [tripState.routeData]);
+  }, [tripState.routeData, filtered.length, detourDistance]);
 
   // Marker Management
   useEffect(() => {
@@ -1033,9 +1097,9 @@ export function MapPage() {
                   <p className="text-[0.8rem] text-slate-500 font-medium tracking-tight">via driving route</p>
                   
                   <div className="flex items-center gap-1.5 mt-2.5 text-slate-700 text-sm font-semibold">
-                    <span>{(tripState.routeData.coordinates.length * 0.05).toFixed(2)}km</span>
+                    <span>{tripState.distance?.toFixed(2)}km</span>
                     <span className="text-slate-300">|</span>
-                    <span>{Math.round((tripState.routeData.coordinates.length * 0.05) / 60)}hr</span>
+                    <span>{formatDuration(tripState.duration || 0)}</span>
                   </div>
                   
                   <p className="text-[#ea580c] text-[0.8rem] font-bold mt-1.5">
