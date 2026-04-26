@@ -128,6 +128,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const savedVehicles = localStorage.getItem("plugpoint_my_vehicles");
     const savedActive = localStorage.getItem("plugpoint_active_vehicle_id");
     
+    // Migration: If no myVehicles exist, check for legacy plugpoint_my_ev
+    if (!savedVehicles) {
+      const legacyEv = localStorage.getItem("plugpoint_my_ev");
+      if (legacyEv) {
+        try {
+          const parsed = JSON.parse(legacyEv);
+          type LegacyEVDetails = { make: string; model: string; image?: string; pluginType?: string };
+          const details: LegacyEVDetails = parsed;
+          const migratedVehicle: UserVehicle = {
+            id: "legacy_" + Date.now(),
+            modelId: "legacy",
+            brandName: details.make || "Unknown",
+            modelName: details.model || details.make || "My EV",
+            image: details.image || "/cars/m1.jpeg",
+            logoUrl: ""
+          };
+          setMyVehicles([migratedVehicle]);
+          setActiveVehicle(migratedVehicle);
+          // Remove legacy key after migration
+          localStorage.removeItem("plugpoint_my_ev");
+          return; // Exit early as we've initialized with legacy data
+        } catch (e) {
+          console.error("Failed to migrate legacy EV data", e);
+        }
+      }
+    }
+
     if (savedVehicles) {
       try {
         const parsed = JSON.parse(savedVehicles);

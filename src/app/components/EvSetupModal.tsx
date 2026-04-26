@@ -37,10 +37,11 @@ export function EvSetupModal({ isOpen, onClose }: EvSetupModalProps) {
         setView("add");
       } else {
         setView("selector");
-        setTempActiveVehicleId(activeVehicle?.id || null);
+        // Only reset temp active vehicle if it is not already set
+        setTempActiveVehicleId((prev) => prev || activeVehicle?.id || null);
       }
     }
-  }, [isOpen, myVehicles, activeVehicle]);
+  }, [isOpen, activeVehicle]); // Removed myVehicles to prevent overriding temp state when a vehicle is added
 
   const filteredModels = useMemo(() => {
     return evModels.filter((model) => {
