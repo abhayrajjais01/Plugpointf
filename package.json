@@ -43,7 +43,7 @@
     "@types/leaflet": "^1.9.21",
     "@types/maplibre-gl": "^1.13.2",
     "class-variance-authority": "0.7.1",
-    "clsx": "2.1.1",
+    "clsx": "^2.1.1",
     "cmdk": "1.1.1",
     "date-fns": "3.6.0",
     "embla-carousel-react": "8.6.0",
@@ -54,9 +54,11 @@
     "maplibre-gl": "^5.21.1",
     "motion": "12.23.24",
     "next-themes": "0.4.6",
+    "react": "18.3.1",
     "react-day-picker": "8.10.1",
     "react-dnd": "16.0.1",
     "react-dnd-html5-backend": "16.0.1",
+    "react-dom": "18.3.1",
     "react-hook-form": "7.55.0",
     "react-popper": "2.3.0",
     "react-resizable-panels": "2.1.7",
@@ -65,11 +67,9 @@
     "react-slick": "0.31.0",
     "recharts": "2.15.2",
     "sonner": "2.0.3",
-    "tailwind-merge": "3.2.0",
+    "tailwind-merge": "^3.2.0",
     "tw-animate-css": "1.3.8",
-    "vaul": "1.1.2",
-    "react": "18.3.1",
-    "react-dom": "18.3.1"
+    "vaul": "1.1.2"
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.1.12",
@@ -77,7 +77,6 @@
     "tailwindcss": "4.1.12",
     "vite": "^6.4.1"
   },
-
   "pnpm": {
     "overrides": {
       "vite": "6.3.5"

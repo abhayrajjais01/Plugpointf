@@ -12,6 +12,8 @@ import {
   type Review,
 } from "../data/mock-data";
 
+import type { UserVehicle } from "../data/ev-data";
+
 // This hook handles the technical details of Firebase login/logout
 import { useFirebaseAuth } from "../../hooks/useFirebaseAuth";
 
@@ -76,8 +78,10 @@ interface AppState {
     duration: number | null;
     error: string | null;
   }>>;
-  evDetails: { make: string; model: string } | null;
-  setEvDetails: React.Dispatch<React.SetStateAction<{ make: string; model: string } | null>>;
+  myVehicles: UserVehicle[];
+  setMyVehicles: React.Dispatch<React.SetStateAction<UserVehicle[]>>;
+  activeVehicle: UserVehicle | null;
+  setActiveVehicle: React.Dispatch<React.SetStateAction<UserVehicle | null>>;
 }
 
 const AppContext = createContext<AppState | undefined>(undefined);
@@ -116,17 +120,67 @@ export function AppProvider({ children }: { children: ReactNode }) {
     error: null,
   });
 
-  const [evDetails, setEvDetails] = useState<{ make: string; model: string } | null>(null);
+  const [myVehicles, setMyVehicles] = useState<UserVehicle[]>([]);
+  const [activeVehicle, setActiveVehicle] = useState<UserVehicle | null>(null);
 
-  // Load EV Details on mount
+  // Load EVs on mount
   useEffect(() => {
-    const saved = localStorage.getItem("plugpoint_my_ev");
-    if (saved) {
+    const savedVehicles = localStorage.getItem("plugpoint_my_vehicles");
+    const savedActive = localStorage.getItem("plugpoint_active_vehicle_id");
+    
+    // Migration: If no myVehicles exist, check for legacy plugpoint_my_ev
+    if (!savedVehicles) {
+      const legacyEv = localStorage.getItem("plugpoint_my_ev");
+      if (legacyEv) {
+        try {
+          const parsed = JSON.parse(legacyEv);
+          type LegacyEVDetails = { make: string; model: string; image?: string; pluginType?: string };
+          const details: LegacyEVDetails = parsed;
+          const migratedVehicle: UserVehicle = {
+            id: "legacy_" + Date.now(),
+            modelId: "legacy",
+            brandName: details.make || "Unknown",
+            modelName: details.model || details.make || "My EV",
+            image: details.image || "/cars/m1.jpeg",
+            logoUrl: ""
+          };
+          setMyVehicles([migratedVehicle]);
+          setActiveVehicle(migratedVehicle);
+          // Remove legacy key after migration
+          localStorage.removeItem("plugpoint_my_ev");
+          return; // Exit early as we've initialized with legacy data
+        } catch (e) {
+          console.error("Failed to migrate legacy EV data", e);
+        }
+      }
+    }
+
+    if (savedVehicles) {
       try {
-        setEvDetails(JSON.parse(saved));
+        const parsed = JSON.parse(savedVehicles);
+        setMyVehicles(parsed);
+        if (savedActive) {
+          const active = parsed.find((v: UserVehicle) => v.id === savedActive);
+          if (active) setActiveVehicle(active);
+        } else if (parsed.length > 0) {
+          setActiveVehicle(parsed[0]);
+        }
       } catch (e) {}
     }
   }, []);
+
+  // Save vehicles whenever they change
+  useEffect(() => {
+    localStorage.setItem("plugpoint_my_vehicles", JSON.stringify(myVehicles));
+  }, [myVehicles]);
+
+  useEffect(() => {
+    if (activeVehicle) {
+       localStorage.setItem("plugpoint_active_vehicle_id", activeVehicle.id);
+    } else {
+       localStorage.removeItem("plugpoint_active_vehicle_id");
+    }
+  }, [activeVehicle]);
 
   // --- STEP 1: INITIAL DATA LOAD ---
   // This runs exactly once when the app first opens.
@@ -442,8 +496,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setIsNavigating,
         tripState,
         setTripState,
-        evDetails,
-        setEvDetails,
+        myVehicles,
+        setMyVehicles,
+        activeVehicle,
+        setActiveVehicle,
       }}
     >
       {children}

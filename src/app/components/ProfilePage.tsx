@@ -44,7 +44,7 @@ export function ProfilePage() {
   const [isEvSetupOpen, setIsEvSetupOpen] = useState(false);
   
   // We pull everything about the current user from our global AppContext
-  const { user, isAuthenticated, logout, bookings, chargers, reviews, topUpWallet, evDetails } = useApp();
+  const { user, isAuthenticated, logout, bookings, chargers, reviews, topUpWallet, activeVehicle } = useApp();
 
   const handleTopUp = async () => {
     if (!user) return;
@@ -236,10 +236,10 @@ export function ProfilePage() {
           </div>
           <div className="flex-1">
             <p className="text-[0.65rem] text-slate-400 font-bold uppercase tracking-wider">My Vehicle</p>
-            <p className="text-[0.85rem] font-bold text-slate-900">{evDetails ? `${evDetails.make} ${evDetails.model}` : "Add your EV"}</p>
+            <p className="text-[0.85rem] font-bold text-slate-900">{activeVehicle ? `${activeVehicle.brandName} ${activeVehicle.modelName}` : "Add your EV"}</p>
           </div>
           <button onClick={() => setIsEvSetupOpen(true)} className="px-3 py-1.5 bg-primary/8 text-primary rounded-lg text-[0.7rem] font-bold hover:bg-primary/15 transition-colors cursor-pointer">
-            {evDetails ? "Edit" : "Setup"}
+            {activeVehicle ? "Edit" : "Setup"}
           </button>
         </div>
       </div>
