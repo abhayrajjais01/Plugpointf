@@ -21,6 +21,8 @@ export interface UserVehicle {
   registrationNumber?: string;
 }
 
+const DEFAULT_EV_IMAGE = "/cars/ev-placeholder.svg";
+
 export const evBrands: EVBrand[] = [
   { id: "b1", name: "Tata", logoUrl: "https://upload.wikimedia.org/wikipedia/commons/8/8e/Tata_logo.svg" },
   { id: "b2", name: "MG", logoUrl: "https://upload.wikimedia.org/wikipedia/en/7/7b/MG_Motor_logo.svg" },
@@ -39,60 +41,60 @@ export const evBrands: EVBrand[] = [
 
 export const evModels: EVModel[] = [
   // Tata
-  { id: "m1", brandId: "b1", name: "Tata Nexon EV", image: "/cars/m1.jpeg" },
-  { id: "m2", brandId: "b1", name: "Tata Tiago EV", image: "/cars/m2.jpeg" },
-  { id: "m3", brandId: "b1", name: "Tata Punch EV", image: "/cars/m3.jpeg" },
-  { id: "m4", brandId: "b1", name: "Tata Tigor EV", image: "/cars/m4.jpeg" },
-  { id: "m5", brandId: "b1", name: "Tata Curvv EV", image: "/cars/m5.jpeg" },
-  { id: "m6", brandId: "b1", name: "Tata Harrier EV", image: "/cars/m6.jpeg" },
+  { id: "m1", brandId: "b1", name: "Tata Nexon EV", image: DEFAULT_EV_IMAGE },
+  { id: "m2", brandId: "b1", name: "Tata Tiago EV", image: DEFAULT_EV_IMAGE },
+  { id: "m3", brandId: "b1", name: "Tata Punch EV", image: DEFAULT_EV_IMAGE },
+  { id: "m4", brandId: "b1", name: "Tata Tigor EV", image: DEFAULT_EV_IMAGE },
+  { id: "m5", brandId: "b1", name: "Tata Curvv EV", image: DEFAULT_EV_IMAGE },
+  { id: "m6", brandId: "b1", name: "Tata Harrier EV", image: DEFAULT_EV_IMAGE },
   
   // MG
-  { id: "m7", brandId: "b2", name: "MG ZS EV", image: "/cars/m7.jpeg" },
-  { id: "m8", brandId: "b2", name: "MG Comet EV", image: "/cars/m8.jpeg" },
-  { id: "m9", brandId: "b2", name: "MG Cyberster", image: "/cars/m9.jpeg" },
+  { id: "m7", brandId: "b2", name: "MG ZS EV", image: DEFAULT_EV_IMAGE },
+  { id: "m8", brandId: "b2", name: "MG Comet EV", image: DEFAULT_EV_IMAGE },
+  { id: "m9", brandId: "b2", name: "MG Cyberster", image: DEFAULT_EV_IMAGE },
 
   // Mahindra
-  { id: "m10", brandId: "b3", name: "Mahindra XUV400", image: "/cars/m10.jpeg" },
+  { id: "m10", brandId: "b3", name: "Mahindra XUV400", image: DEFAULT_EV_IMAGE },
   
   // Hyundai
-  { id: "m11", brandId: "b4", name: "Hyundai Kona Electric", image: "/cars/m11.jpeg" },
-  { id: "m12", brandId: "b4", name: "Hyundai Ioniq 5", image: "/cars/m12.jpeg" },
+  { id: "m11", brandId: "b4", name: "Hyundai Kona Electric", image: DEFAULT_EV_IMAGE },
+  { id: "m12", brandId: "b4", name: "Hyundai Ioniq 5", image: DEFAULT_EV_IMAGE },
 
   // BYD
-  { id: "m13", brandId: "b5", name: "BYD Atto 3", image: "/cars/m13.jpeg" },
-  { id: "m14", brandId: "b5", name: "BYD Seal", image: "/cars/m14.jpeg" },
-  { id: "m15", brandId: "b5", name: "BYD e6", image: "/cars/m15.jpeg" },
+  { id: "m13", brandId: "b5", name: "BYD Atto 3", image: DEFAULT_EV_IMAGE },
+  { id: "m14", brandId: "b5", name: "BYD Seal", image: DEFAULT_EV_IMAGE },
+  { id: "m15", brandId: "b5", name: "BYD e6", image: DEFAULT_EV_IMAGE },
 
   // Kia
-  { id: "m16", brandId: "b6", name: "Kia EV6", image: "/cars/m16.jpeg" },
-  { id: "m17", brandId: "b6", name: "Kia EV9", image: "/cars/m17.jpeg" },
+  { id: "m16", brandId: "b6", name: "Kia EV6", image: DEFAULT_EV_IMAGE },
+  { id: "m17", brandId: "b6", name: "Kia EV9", image: DEFAULT_EV_IMAGE },
 
   // Citroen
-  { id: "m18", brandId: "b7", name: "Citroen eC3", image: "/cars/m18.jpeg" },
+  { id: "m18", brandId: "b7", name: "Citroen eC3", image: DEFAULT_EV_IMAGE },
 
   // Volvo
-  { id: "m19", brandId: "b8", name: "Volvo XC40 Recharge", image: "/cars/m19.jpeg" },
-  { id: "m20", brandId: "b8", name: "Volvo EX30", image: "/cars/m20.jpeg" },
-  { id: "m21", brandId: "b8", name: "Volvo C40 Recharge", image: "/cars/m21.jpeg" },
+  { id: "m19", brandId: "b8", name: "Volvo XC40 Recharge", image: DEFAULT_EV_IMAGE },
+  { id: "m20", brandId: "b8", name: "Volvo EX30", image: DEFAULT_EV_IMAGE },
+  { id: "m21", brandId: "b8", name: "Volvo C40 Recharge", image: DEFAULT_EV_IMAGE },
 
   // BMW
-  { id: "m22", brandId: "b9", name: "BMW iX", image: "/cars/m22.jpeg" },
-  { id: "m23", brandId: "b9", name: "BMW i4", image: "/cars/m23.jpeg" },
-  { id: "m24", brandId: "b9", name: "BMW i7", image: "/cars/m24.jpeg" },
-  { id: "m25", brandId: "b9", name: "BMW iX1", image: "/cars/m25.jpeg" },
+  { id: "m22", brandId: "b9", name: "BMW iX", image: DEFAULT_EV_IMAGE },
+  { id: "m23", brandId: "b9", name: "BMW i4", image: DEFAULT_EV_IMAGE },
+  { id: "m24", brandId: "b9", name: "BMW i7", image: DEFAULT_EV_IMAGE },
+  { id: "m25", brandId: "b9", name: "BMW iX1", image: DEFAULT_EV_IMAGE },
 
   // Mercedes-Benz
-  { id: "m26", brandId: "b10", name: "Mercedes-Benz EQB", image: "/cars/m26.jpeg" },
-  { id: "m27", brandId: "b10", name: "Mercedes-Benz EQS", image: "/cars/m27.jpeg" },
-  { id: "m28", brandId: "b10", name: "Mercedes-Benz EQE SUV", image: "/cars/m28.jpeg" },
+  { id: "m26", brandId: "b10", name: "Mercedes-Benz EQB", image: DEFAULT_EV_IMAGE },
+  { id: "m27", brandId: "b10", name: "Mercedes-Benz EQS", image: DEFAULT_EV_IMAGE },
+  { id: "m28", brandId: "b10", name: "Mercedes-Benz EQE SUV", image: DEFAULT_EV_IMAGE },
 
   // Audi
-  { id: "m29", brandId: "b11", name: "Audi Q8 e-tron", image: "/cars/m29.jpeg" },
-  { id: "m30", brandId: "b11", name: "Audi e-tron GT", image: "/cars/m30.jpeg" },
+  { id: "m29", brandId: "b11", name: "Audi Q8 e-tron", image: DEFAULT_EV_IMAGE },
+  { id: "m30", brandId: "b11", name: "Audi e-tron GT", image: DEFAULT_EV_IMAGE },
 
   // Porsche
-  { id: "m31", brandId: "b12", name: "Porsche Taycan", image: "/cars/m31.jpeg" },
+  { id: "m31", brandId: "b12", name: "Porsche Taycan", image: DEFAULT_EV_IMAGE },
   
   // Mini
-  { id: "m32", brandId: "b13", name: "Mini Cooper SE", image: "/cars/m32.jpeg" }
+  { id: "m32", brandId: "b13", name: "Mini Cooper SE", image: DEFAULT_EV_IMAGE }
 ];

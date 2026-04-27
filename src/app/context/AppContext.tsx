@@ -32,6 +32,10 @@ import {
   fetchWalletBalance,
   updateWalletBalance,
 } from "../../lib/db";
+import {
+  fetchPublicChargersAlongRoute,
+  fetchPublicChargersNear,
+} from "../../services/publicChargers";
 
 interface AppState {
   user: User | null;
@@ -141,7 +145,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             modelId: "legacy",
             brandName: details.make || "Unknown",
             modelName: details.model || details.make || "My EV",
-            image: details.image || "/cars/m1.jpeg",
+            image: details.image || "/cars/ev-placeholder.svg",
             logoUrl: ""
           };
           setMyVehicles([migratedVehicle]);
@@ -362,55 +366,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return success;
   };
 
+  const mergePublicChargers = (publicChargers: Charger[]) => {
+    setChargers(prev => {
+      const existingIds = new Set(prev.map(c => c.id));
+      const newChargers = publicChargers.filter(c => !existingIds.has(c.id));
+      return [...prev, ...newChargers];
+    });
+  };
+
   // This function fetches real-world EV chargers near a specific Latitude/Longitude.
   // We use the "Open Charge Map" (OCM) API to get this data.
   const fetchPublicChargers = async (lat: number, lng: number) => {
     try {
-      // 1. Get our secret API key from the environment variables (.env file)
-      const apiKey = (import.meta as any).env.VITE_OCM_API_KEY || '';
-
-      // 2. Build the URL. We ask for chargers within 15 KM of the user.
-      const url = `https://api.openchargemap.io/v3/poi?output=json&latitude=${lat}&longitude=${lng}&distance=15&distanceunit=KM&maxresults=40` + (apiKey ? `&key=${apiKey}` : '');
-
-      const res = await fetch(url);
-      if (!res.ok) return; // If the API is down or the key is wrong, just stop here.
-      const data = await res.json();
-
-      // 3. The API gives us a lot of raw data. We "map" (transform) it into our 
-      // standard "Charger" format so the rest of our app can display it easily.
-      const publicChargers: Charger[] = data.map((poi: any) => ({
-        id: `ocm-${poi.ID}`, // Prefix with 'ocm-' to avoid ID crashes with mock data
-        ownerId: `ocm-network`,
-        ownerName: poi.OperatorInfo?.Title || 'Public Station',
-        ownerAvatar: "https://images.unsplash.com/photo-1548625361-9d10e8c8942b?w=150&h=150&fit=crop",
-        ownerRating: 4.0,
-        title: poi.AddressInfo?.Title || 'Public EV Charger',
-        description: poi.GeneralComments || "Public charging station provided via Open Charge Map.",
-        image: "https://images.unsplash.com/photo-1593941707882-a5bba14938c7?w=1080&h=720&fit=crop",
-        address: poi.AddressInfo?.AddressLine1 || 'Public Location',
-        city: poi.AddressInfo?.Town || '',
-        lat: poi.AddressInfo?.Latitude,
-        lng: poi.AddressInfo?.Longitude,
-        connectorType: poi.Connections?.[0]?.ConnectionType?.Title || 'Universal',
-        power: poi.Connections?.[0]?.PowerKW || 7.2,
-        pricePerHour: 100, // Standard price since API doesn't always provide it
-        pricePerKwh: 15,
-        available: true,
-        availableHours: "24/7",
-        rating: 4.5,
-        reviewCount: 0,
-        amenities: ["Public Access"],
-        instructions: poi.AddressInfo?.AddressLine1 || "Public usage. Follow operator instructions on site.",
-        verified: true,
-      }));
-
-      // 4. Merge the new data with what we already have.
-      setChargers(prev => {
-        const existingIds = new Set(prev.map(c => c.id));
-        // Only add chargers we haven't seen before to avoid showing duplicates on the map
-        const newChargers = publicChargers.filter(c => !existingIds.has(c.id));
-        return [...prev, ...newChargers];
-      });
+      const publicChargers = await fetchPublicChargersNear(lat, lng);
+      mergePublicChargers(publicChargers);
     } catch (err) {
       console.error("Failed to fetch OCM data:", err);
     }
@@ -419,47 +388,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // This is a special version that searches for chargers along a driving path (Polyline).
   const fetchPublicChargersForRoute = async (polyline: string, distance: number = 5) => {
     try {
-      const apiKey = (import.meta as any).env.VITE_OCM_API_KEY || '';
-
-      // We pass the 'polyline' string. The API finds chargers within the specified detour distance.
-      const url = `https://api.openchargemap.io/v3/poi?output=json&polyline=${encodeURIComponent(polyline)}&distance=${distance}&distanceunit=KM&maxresults=500` + (apiKey ? `&key=${apiKey}` : '');
-
-      const res = await fetch(url);
-      if (!res.ok) return;
-      const data = await res.json();
-
-      const publicChargers: Charger[] = data.map((poi: any) => ({
-        id: `ocm-${poi.ID}`,
-        ownerId: `ocm-network`,
-        ownerName: poi.OperatorInfo?.Title || 'Public Station',
-        ownerAvatar: "https://images.unsplash.com/photo-1548625361-9d10e8c8942b?w=150&h=150&fit=crop",
-        ownerRating: 4.0,
-        title: poi.AddressInfo?.Title || 'Public EV Charger',
-        description: poi.GeneralComments || "Public charging station provided via Open Charge Map.",
-        image: "https://images.unsplash.com/photo-1593941707882-a5bba14938c7?w=1080&h=720&fit=crop",
-        address: poi.AddressInfo?.AddressLine1 || 'Public Location',
-        city: poi.AddressInfo?.Town || '',
-        lat: poi.AddressInfo?.Latitude,
-        lng: poi.AddressInfo?.Longitude,
-        connectorType: poi.Connections?.[0]?.ConnectionType?.Title || 'Universal',
-        power: poi.Connections?.[0]?.PowerKW || 7.2,
-        pricePerHour: 100,
-        pricePerKwh: 15,
-        available: true,
-        availableHours: "24/7",
-        rating: 4.5,
-        reviewCount: 0,
-        amenities: ["Public Access", "On Route"], // Tag them so we know they are route-specific
-        instructions: poi.AddressInfo?.AccessComments || "Public usage. Follow operator instructions on site.",
-        verified: true,
-      }));
-
-      // 5. Again, merge without duplicates
-      setChargers(prev => {
-        const existingIds = new Set(prev.map(c => c.id));
-        const newChargers = publicChargers.filter(c => !existingIds.has(c.id));
-        return [...prev, ...newChargers];
-      });
+      const publicChargers = await fetchPublicChargersAlongRoute(polyline, distance);
+      mergePublicChargers(publicChargers);
     } catch (err) {
       console.error("Failed to fetch route-based OCM data:", err);
     }

@@ -4,22 +4,24 @@ import {
   User,
   Shield,
   Star,
-  MapPin,
   CalendarDays,
   Zap,
   ChevronRight,
   LogOut,
-  Settings,
   HelpCircle,
-  Bell,
   CreditCard,
-  Heart,
   MessageCircle,
   Award,
   Car,
   Battery,
   X,
   Loader2,
+  Pencil,
+  Wallet,
+  Bookmark,
+  PlugZap,
+  Tag,
+  Lock,
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { toast } from "sonner";
@@ -29,9 +31,14 @@ declare var Razorpay: any;
 
 /**
  * --- THE PROFILE PAGE ---
- * This screen displays the user's personal info, their stats 
- * (like how much they've spent or how many chargers they own), 
- * and a menu for settings and support.
+ * Redesigned to match the Statiq-style mobile profile UI:
+ * - Light green gradient header with avatar, name, email, phone
+ * - "Your GREEN journey starts today" banner
+ * - Promo/wallet card (dark)
+ * - 3 quick-action shortcuts
+ * - Wallet balance row with Add Credits
+ * - Manage section
+ * - Stations section
  */
 export function ProfilePage() {
   const navigate = useNavigate();
@@ -39,11 +46,8 @@ export function ProfilePage() {
   const [isTopUpOpen, setIsTopUpOpen] = useState(false);
   const [topUpAmount, setTopUpAmount] = useState<number>(500);
   const [isToppingUp, setIsToppingUp] = useState(false);
-  
-  // My EV States
   const [isEvSetupOpen, setIsEvSetupOpen] = useState(false);
-  
-  // We pull everything about the current user from our global AppContext
+
   const { user, isAuthenticated, logout, bookings, chargers, reviews, topUpWallet, activeVehicle } = useApp();
 
   const handleTopUp = async () => {
@@ -51,20 +55,16 @@ export function ProfilePage() {
     setIsToppingUp(true);
     try {
       const razorpayKeyId = import.meta.env.VITE_RAZORPAY_KEY_ID;
-
       if (!razorpayKeyId) {
         throw new Error("Razorpay is not configured. Please add VITE_RAZORPAY_KEY_ID to your .env file.");
       }
-
-      // Open Razorpay checkout directly (no server-side order creation needed)
       const options = {
         key: razorpayKeyId,
-        amount: topUpAmount * 100, // Razorpay expects paise
+        amount: topUpAmount * 100,
         currency: "INR",
         name: "PlugPoint",
         description: `Wallet Top-Up ₹${topUpAmount}`,
         handler: async function (response: any) {
-          // This fires ONLY on successful payment
           try {
             const success = await topUpWallet(topUpAmount, response.razorpay_payment_id);
             if (success) {
@@ -84,18 +84,11 @@ export function ProfilePage() {
           email: user.email,
           contact: user.phone.replace(/\s/g, ''),
         },
-        theme: {
-          color: "#10b981",
-        },
-        modal: {
-          ondismiss: function() {
-            setIsToppingUp(false);
-          }
-        }
+        theme: { color: "#10b981" },
+        modal: { ondismiss: function() { setIsToppingUp(false); } },
       };
-
       const rzp = new Razorpay(options);
-      rzp.on('payment.failed', function (response: any){
+      rzp.on('payment.failed', function (response: any) {
         toast.error(`Payment failed: ${response.error.description}`);
         setIsToppingUp(false);
       });
@@ -107,7 +100,6 @@ export function ProfilePage() {
   };
 
   // --- SECURITY CHECK ---
-  // If the user isn't logged in, we show a "Please Sign In" empty state
   if (!isAuthenticated || !user) {
     return (
       <div className="flex flex-col items-center justify-center h-full px-6 text-center bg-background">
@@ -136,170 +128,393 @@ export function ProfilePage() {
   const userReviews = reviews.filter((r) => r.userId === user.id).length;
   const isSuperhost = user.rating >= 4.5 && userChargers.length > 0;
 
-  // --- MENU DATA ---
-  const menuSections = [
-    {
-      title: "Account",
-      items: [
-        { icon: CreditCard, label: "Wallet Balance", detail: `₹${user.walletBalance || 0}`, iconBg: "bg-emerald-500/10", iconColor: "text-emerald-600", onClick: () => setIsTopUpOpen(true) },
-        { icon: Bell, label: "Active Bookings", detail: upcomingBookings > 0 ? `${upcomingBookings} upcoming` : "None", iconBg: "bg-blue-500/10", iconColor: "text-blue-600", onClick: () => navigate("/bookings") },
-        { icon: Heart, label: "My Reviews", detail: `${userReviews} reviews`, iconBg: "bg-pink-500/10", iconColor: "text-pink-600", onClick: () => toast.info("Reviews management coming soon!") },
-        { icon: MessageCircle, label: "Messages", detail: "", iconBg: "bg-purple-500/10", iconColor: "text-purple-600", onClick: () => navigate("/messages") },
-      ],
-    },
-    {
-      title: "Host",
-      items: [
-        { 
-          icon: Zap, 
-          label: "My Chargers", 
-          detail: `${userChargers.length} listed`, 
-          iconBg: "bg-amber-500/10", 
-          iconColor: "text-amber-600", 
-          onClick: () => navigate(userChargers.length > 0 ? "/manage-chargers" : "/list-charger") 
-        },
-        { icon: CreditCard, label: "Earnings", detail: "View & Cashout", iconBg: "bg-emerald-500/10", iconColor: "text-emerald-600", onClick: () => navigate("/host-earnings") },
-        { icon: Award, label: "Host Level", detail: isSuperhost ? "Superhost ⭐" : "Standard", iconBg: "bg-primary/10", iconColor: "text-primary", onClick: () => toast.info("Host levels are assigned automatically.") },
-      ],
-    },
-  ];
+  // Get user initials for avatar fallback
+  const initials = user.name
+    .split(" ")
+    .map((n: string) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
 
   return (
-    <div className="pb-6 bg-background min-h-full">
-      
+    <div className="bg-[#f5f5f5] min-h-full pb-8" style={{ fontFamily: "'Inter', sans-serif" }}>
+
       {/* ═══════════════════════════════════════════
-          DARK GRADIENT PROFILE HEADER
+          LIGHT GREEN GRADIENT HEADER (Statiq style)
           ═══════════════════════════════════════════ */}
-      <div className="header-gradient relative overflow-hidden">
-        {/* Subtle glow */}
-        <div className="absolute top-0 right-0 w-48 h-48 bg-primary/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl" />
-        
-        <div className="relative z-10 px-5 pt-6 pb-6">
-          {/* Profile Info Row */}
-          <div className="flex items-center gap-4">
-            {/* Avatar with green ring */}
-            <div className="relative">
-              <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-emerald-400/30 shadow-lg">
+      <div
+        style={{
+          background: "linear-gradient(160deg, #c8f0d8 0%, #a8e6c0 40%, #d4f4e2 100%)",
+          position: "relative",
+          overflow: "hidden",
+          paddingBottom: "24px",
+        }}
+      >
+        {/* Decorative blobs */}
+        <div style={{
+          position: "absolute", right: "-20px", bottom: "-10px",
+          width: "140px", height: "140px",
+          background: "radial-gradient(circle, #4ade8060 0%, transparent 70%)",
+          borderRadius: "50%",
+        }} />
+        <div style={{
+          position: "absolute", right: "30px", bottom: "10px",
+          width: "80px", height: "80px",
+          background: "radial-gradient(circle, #86efac50 0%, transparent 70%)",
+          borderRadius: "50%",
+        }} />
+
+        {/* Top row: back arrow (spacer) + avatar + info + edit icon */}
+        <div style={{ padding: "20px 16px 0 16px", position: "relative", zIndex: 1 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+            {/* Circular Avatar */}
+            <div style={{ position: "relative", flexShrink: 0 }}>
+              <div style={{
+                width: "58px", height: "58px", borderRadius: "50%",
+                border: "2.5px solid #16a34a",
+                overflow: "hidden",
+                background: "#dcfce7",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                boxShadow: "0 2px 12px rgba(22,163,74,0.25)",
+              }}>
                 {user.avatar && !avatarError ? (
-                  <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" onError={() => setAvatarError(true)} />
+                  <img src={user.avatar} alt={user.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={() => setAvatarError(true)} />
                 ) : (
-                  <div className="w-full h-full bg-white/10 flex items-center justify-center">
-                    <User className="w-8 h-8 text-white/60" />
-                  </div>
+                  <span style={{ fontSize: "1.1rem", fontWeight: 700, color: "#16a34a" }}>{initials}</span>
                 )}
               </div>
               {user.verified && (
-                <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-emerald-500 rounded-lg flex items-center justify-center border-2 border-[#152238]">
-                  <Shield className="w-3 h-3 text-white" />
+                <div style={{
+                  position: "absolute", bottom: "-1px", right: "-1px",
+                  width: "18px", height: "18px", borderRadius: "50%",
+                  background: "#16a34a", border: "2px solid white",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  <Shield style={{ width: "10px", height: "10px", color: "white" }} />
                 </div>
               )}
             </div>
-            
-            <div className="flex-1">
-              <h1 className="text-white text-[1.15rem]" style={{ fontWeight: 700, fontSize: '1.15rem', lineHeight: 1.2 }}>{user.name}</h1>
-              <p className="text-white/40 text-[0.75rem] mt-0.5 font-medium">{user.email}</p>
-              <div className="flex items-center gap-2 mt-1.5">
-                <div className="flex items-center gap-1 px-2 py-0.5 bg-white/8 rounded-md">
-                  <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
-                  <span className="text-[0.7rem] font-semibold text-white/80">{user.rating}</span>
-                </div>
-                <span className="text-[0.65rem] text-white/30 font-medium">Since {user.joinedDate}</span>
-              </div>
+
+            {/* Name / email / phone */}
+            <div style={{ flex: 1 }}>
+              <h1 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700, color: "#1a2e1a", lineHeight: 1.3 }}>
+                {user.name}
+              </h1>
+              <p style={{ margin: "2px 0 0", fontSize: "0.72rem", color: "#2d6a2d", fontWeight: 500 }}>
+                {user.email}
+              </p>
+              <p style={{ margin: "1px 0 0", fontSize: "0.72rem", color: "#2d6a2d", fontWeight: 500 }}>
+                {user.phone || ""}
+              </p>
             </div>
+
+            {/* Edit icon (pencil) */}
+            <button
+              onClick={() => toast.info("Profile editing coming soon!")}
+              style={{
+                width: "36px", height: "36px", borderRadius: "50%",
+                background: "rgba(255,255,255,0.6)",
+                border: "1px solid rgba(22,163,74,0.2)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                cursor: "pointer", flexShrink: 0,
+              }}
+            >
+              <Pencil style={{ width: "16px", height: "16px", color: "#16a34a" }} />
+            </button>
           </div>
 
-          {/* Stats Row */}
-          <div className="grid grid-cols-3 gap-2 mt-5">
-            {[
-              { label: "Bookings", value: completedBookings.toString() },
-              { label: "Chargers", value: userChargers.length.toString() },
-              { label: "Spent", value: `₹${totalSpent.toFixed(0)}` },
-            ].map((stat) => (
-              <div key={stat.label}
-                className="flex flex-col items-center p-3 bg-white/5 rounded-xl border border-white/5"
-              >
-                <span className="text-[1.1rem] text-emerald-400 font-bold">{stat.value}</span>
-                <span className="text-[0.6rem] text-white/30 mt-0.5 font-bold uppercase tracking-wider">{stat.label}</span>
-              </div>
-            ))}
+          {/* "Your GREEN journey starts today" banner */}
+          <div style={{
+            marginTop: "16px",
+            background: "rgba(255,255,255,0.45)",
+            borderRadius: "14px",
+            padding: "12px 14px",
+            backdropFilter: "blur(8px)",
+            border: "1px solid rgba(255,255,255,0.6)",
+            display: "flex", alignItems: "center", gap: "10px",
+          }}>
+            <div style={{ flex: 1 }}>
+              <p style={{ margin: 0, fontSize: "0.78rem", fontWeight: 700, color: "#14532d" }}>
+                Your GREEN journey starts today 🌿
+              </p>
+              <p style={{ margin: "2px 0 0", fontSize: "0.68rem", color: "#166534", fontWeight: 500 }}>
+                Every charge counts for a greener Earth
+              </p>
+            </div>
+            {/* Leaf/nature emoji icon */}
+            <span style={{ fontSize: "1.8rem" }}>🌳</span>
           </div>
         </div>
       </div>
 
       {/* ═══════════════════════════════════════════
-          MY VEHICLE CARD
+          DARK PROMO / WALLET CARD
           ═══════════════════════════════════════════ */}
-      <div className="mx-4 -mt-3 relative z-10">
-        <div className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-3">
-          <div className="w-11 h-11 bg-slate-50 rounded-xl flex items-center justify-center border border-slate-100">
-            <Car className="w-5 h-5 text-slate-400" />
+      <div style={{ padding: "14px 14px 0" }}>
+        <div style={{
+          background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 60%, #0f3460 100%)",
+          borderRadius: "16px",
+          padding: "14px 16px",
+          display: "flex", alignItems: "center", gap: "12px",
+          boxShadow: "0 4px 20px rgba(0,0,0,0.18)",
+        }}>
+          <div style={{ flex: 1 }}>
+            <p style={{ margin: 0, fontSize: "0.72rem", fontWeight: 700, color: "#fbbf24", letterSpacing: "0.01em" }}>
+              PlugPoint WALLET
+            </p>
+            <p style={{ margin: "3px 0 0", fontSize: "0.65rem", color: "rgba(255,255,255,0.55)", fontWeight: 500, lineHeight: 1.4 }}>
+              Use wallet for seamless, one-tap booking payments
+            </p>
           </div>
-          <div className="flex-1">
-            <p className="text-[0.65rem] text-slate-400 font-bold uppercase tracking-wider">My Vehicle</p>
-            <p className="text-[0.85rem] font-bold text-slate-900">{activeVehicle ? `${activeVehicle.brandName} ${activeVehicle.modelName}` : "Add your EV"}</p>
-          </div>
-          <button onClick={() => setIsEvSetupOpen(true)} className="px-3 py-1.5 bg-primary/8 text-primary rounded-lg text-[0.7rem] font-bold hover:bg-primary/15 transition-colors cursor-pointer">
-            {activeVehicle ? "Edit" : "Setup"}
+          <button
+            onClick={() => setIsTopUpOpen(true)}
+            style={{
+              background: "linear-gradient(135deg, #d4a017 0%, #b8860b 100%)",
+              color: "white", border: "none",
+              borderRadius: "10px", padding: "8px 14px",
+              fontSize: "0.7rem", fontWeight: 700,
+              cursor: "pointer", flexShrink: 0,
+              boxShadow: "0 2px 8px rgba(212,160,23,0.4)",
+            }}
+          >
+            Add Credits
           </button>
         </div>
       </div>
 
       {/* ═══════════════════════════════════════════
-          SUPERHOST BADGE (if applicable)
+          3 QUICK ACTION ICONS
           ═══════════════════════════════════════════ */}
-      {isSuperhost && (
-        <div className="mx-4 mt-3">
-          <div className="p-3.5 bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl border border-amber-100/50 flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl flex items-center justify-center shadow-sm">
-              <Award className="w-5 h-5 text-white" />
+      <div style={{
+        margin: "14px 14px 0",
+        background: "white",
+        borderRadius: "16px",
+        padding: "14px 8px",
+        display: "grid", gridTemplateColumns: "1fr 1fr 1fr",
+        boxShadow: "0 1px 6px rgba(0,0,0,0.06)",
+      }}>
+        {[
+          { icon: CalendarDays, label: "Sessions", onClick: () => navigate("/bookings") },
+          { icon: Tag, label: "Offers", onClick: () => toast.info("Offers & deals coming soon!") },
+          { icon: HelpCircle, label: "Help", onClick: () => toast.info("Help & support coming soon!") },
+        ].map(({ icon: Icon, label, onClick }) => (
+          <button
+            key={label}
+            onClick={onClick}
+            style={{
+              display: "flex", flexDirection: "column",
+              alignItems: "center", gap: "6px",
+              background: "transparent", border: "none",
+              cursor: "pointer", padding: "4px 0",
+            }}
+          >
+            <div style={{
+              width: "44px", height: "44px",
+              background: "#f0fdf4",
+              borderRadius: "12px",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              border: "1px solid #dcfce7",
+            }}>
+              <Icon style={{ width: "20px", height: "20px", color: "#15803d" }} />
             </div>
-            <div className="flex-1">
-              <p className="text-[0.85rem] font-bold text-amber-900">Superhost Status</p>
-              <p className="text-[0.7rem] text-amber-700/60 font-medium mt-0.5">Top-rated host with outstanding service</p>
-            </div>
-          </div>
-        </div>
-      )}
+            <span style={{ fontSize: "0.68rem", fontWeight: 600, color: "#1a2e1a" }}>{label}</span>
+          </button>
+        ))}
+      </div>
 
       {/* ═══════════════════════════════════════════
-          MENU SECTIONS
+          WALLET BALANCE ROW
           ═══════════════════════════════════════════ */}
-      {menuSections.map((section) => (
-        <div key={section.title} className="mt-5">
-          {/* Section Heading */}
-          <h3 className="px-5 text-[0.65rem] text-slate-400 uppercase tracking-widest mb-2 font-bold">
-            {section.title}
-          </h3>
-          <div className="mx-4 bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
-            {section.items.map((item, i) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.label}
-                  onClick={item.onClick}
-                  className={`flex items-center gap-3 w-full px-4 py-3.5 text-left hover:bg-slate-50 active:bg-slate-100 transition-colors ${
-                    i < section.items.length - 1 ? "border-b border-slate-50" : ""
-                  }`}
-                >
-                  <div className={`w-8 h-8 ${item.iconBg} rounded-xl flex items-center justify-center flex-shrink-0`}>
-                    <Icon className={`w-4 h-4 ${item.iconColor}`} />
-                  </div>
-                  <span className="flex-1 text-[0.85rem] font-semibold text-slate-700">{item.label}</span>
-                  {item.detail && (
-                    <span className="text-[0.7rem] text-slate-400 mr-1 font-medium">
-                      {item.detail}
-                    </span>
-                  )}
-                  <ChevronRight className="w-4 h-4 text-slate-300" />
-                </button>
-              );
-            })}
+      <div style={{ margin: "12px 14px 0" }}>
+        <div style={{
+          background: "white",
+          borderRadius: "16px",
+          padding: "14px 16px",
+          display: "flex", alignItems: "center", gap: "12px",
+          boxShadow: "0 1px 6px rgba(0,0,0,0.06)",
+        }}>
+          <div style={{
+            width: "42px", height: "42px",
+            background: "#f0fdf4",
+            borderRadius: "12px",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            border: "1px solid #dcfce7", flexShrink: 0,
+          }}>
+            <Wallet style={{ width: "20px", height: "20px", color: "#16a34a" }} />
           </div>
+          <div style={{ flex: 1 }}>
+            <p style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "#1a2e1a" }}>
+              ₹ {(user.walletBalance || 0).toFixed(2)}
+            </p>
+            <p style={{ margin: "1px 0 0", fontSize: "0.67rem", color: "#6b7280", fontWeight: 500 }}>
+              Total Balance
+            </p>
+          </div>
+          <button
+            onClick={() => setIsTopUpOpen(true)}
+            style={{
+              background: "transparent",
+              border: "1.5px solid #16a34a",
+              color: "#16a34a",
+              borderRadius: "10px", padding: "7px 14px",
+              fontSize: "0.72rem", fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            Add Credits
+          </button>
         </div>
-      ))}
+      </div>
 
-      {/* ─── LOGOUT BUTTON ─── */}
-      <div className="px-4 mt-8">
+      {/* ═══════════════════════════════════════════
+          MANAGE SECTION
+          ═══════════════════════════════════════════ */}
+      <div style={{ margin: "20px 14px 0" }}>
+        <h2 style={{ margin: "0 0 10px 2px", fontSize: "0.95rem", fontWeight: 700, color: "#1a2e1a" }}>
+          Manage
+        </h2>
+        <div style={{
+          background: "white", borderRadius: "16px",
+          overflow: "hidden", boxShadow: "0 1px 6px rgba(0,0,0,0.06)",
+        }}>
+          {[
+            {
+              icon: Car,
+              label: "Vehicle",
+              badge: activeVehicle ? activeVehicle.modelName : undefined,
+              onClick: () => setIsEvSetupOpen(true),
+            },
+            {
+              icon: PlugZap,
+              label: "My Chargers",
+              badge: userChargers.length > 0 ? `${userChargers.length} listed` : undefined,
+              isNew: userChargers.length === 0,
+              onClick: () => navigate(userChargers.length > 0 ? "/manage-chargers" : "/list-charger"),
+            },
+            {
+              icon: CreditCard,
+              label: "Earnings",
+              badge: undefined,
+              onClick: () => navigate("/host-earnings"),
+            },
+            {
+              icon: Award,
+              label: "Host Level",
+              badge: isSuperhost ? "Superhost ⭐" : "Standard",
+              onClick: () => toast.info("Host levels are assigned automatically."),
+            },
+          ].map((item, i, arr) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.label}
+                onClick={item.onClick}
+                style={{
+                  display: "flex", alignItems: "center",
+                  width: "100%", padding: "14px 16px",
+                  background: "transparent", border: "none",
+                  borderBottom: i < arr.length - 1 ? "1px solid #f3f4f6" : "none",
+                  cursor: "pointer", textAlign: "left", gap: "14px",
+                }}
+              >
+                <div style={{
+                  width: "34px", height: "34px", borderRadius: "10px",
+                  background: "#f0fdf4",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  flexShrink: 0,
+                }}>
+                  <Icon style={{ width: "17px", height: "17px", color: "#16a34a" }} />
+                </div>
+                <span style={{ flex: 1, fontSize: "0.85rem", fontWeight: 600, color: "#1a2e1a" }}>
+                  {item.label}
+                </span>
+                {item.isNew && (
+                  <span style={{
+                    background: "#ef4444", color: "white",
+                    fontSize: "0.6rem", fontWeight: 700,
+                    padding: "2px 7px", borderRadius: "20px",
+                    letterSpacing: "0.02em",
+                  }}>New</span>
+                )}
+                {item.badge && !item.isNew && (
+                  <span style={{ fontSize: "0.72rem", color: "#6b7280", fontWeight: 500, marginRight: "2px" }}>
+                    {item.badge}
+                  </span>
+                )}
+                <ChevronRight style={{ width: "16px", height: "16px", color: "#d1d5db", flexShrink: 0 }} />
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════
+          STATIONS SECTION
+          ═══════════════════════════════════════════ */}
+      <div style={{ margin: "20px 14px 0" }}>
+        <h2 style={{ margin: "0 0 10px 2px", fontSize: "0.95rem", fontWeight: 700, color: "#1a2e1a" }}>
+          Stations
+        </h2>
+        <div style={{
+          background: "white", borderRadius: "16px",
+          overflow: "hidden", boxShadow: "0 1px 6px rgba(0,0,0,0.06)",
+        }}>
+          {[
+            {
+              icon: PlugZap,
+              label: "List a Charger",
+              onClick: () => navigate("/list-charger"),
+            },
+            {
+              icon: Lock,
+              label: "My Bookings",
+              badge: upcomingBookings > 0 ? `${upcomingBookings} upcoming` : undefined,
+              onClick: () => navigate("/bookings"),
+            },
+            {
+              icon: Bookmark,
+              label: "Messages",
+              onClick: () => navigate("/messages"),
+            },
+          ].map((item, i, arr) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.label}
+                onClick={item.onClick}
+                style={{
+                  display: "flex", alignItems: "center",
+                  width: "100%", padding: "14px 16px",
+                  background: "transparent", border: "none",
+                  borderBottom: i < arr.length - 1 ? "1px solid #f3f4f6" : "none",
+                  cursor: "pointer", textAlign: "left", gap: "14px",
+                }}
+              >
+                <div style={{
+                  width: "34px", height: "34px", borderRadius: "10px",
+                  background: "#f0fdf4",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  flexShrink: 0,
+                }}>
+                  <Icon style={{ width: "17px", height: "17px", color: "#16a34a" }} />
+                </div>
+                <span style={{ flex: 1, fontSize: "0.85rem", fontWeight: 600, color: "#1a2e1a" }}>
+                  {item.label}
+                </span>
+                {"badge" in item && item.badge && (
+                  <span style={{ fontSize: "0.72rem", color: "#6b7280", fontWeight: 500, marginRight: "2px" }}>
+                    {item.badge}
+                  </span>
+                )}
+                <ChevronRight style={{ width: "16px", height: "16px", color: "#d1d5db", flexShrink: 0 }} />
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ─── SIGN OUT ─── */}
+      <div style={{ margin: "24px 14px 0" }}>
         <button
           onClick={async () => {
             try {
@@ -309,18 +524,30 @@ export function ProfilePage() {
               console.error("Logout error:", error);
             }
           }}
-          className="flex items-center justify-center gap-2 w-full py-3 border border-red-100 text-red-500 rounded-xl text-[0.85rem] font-semibold hover:bg-red-50 transition-colors"
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "center",
+            gap: "8px", width: "100%", padding: "13px",
+            background: "white", border: "1.5px solid #fee2e2",
+            borderRadius: "14px", color: "#ef4444",
+            fontSize: "0.85rem", fontWeight: 700,
+            cursor: "pointer",
+            boxShadow: "0 1px 6px rgba(0,0,0,0.04)",
+          }}
         >
-          <LogOut className="w-4 h-4" />
+          <LogOut style={{ width: "16px", height: "16px" }} />
           Sign Out
         </button>
       </div>
 
-      <p className="text-center text-[0.65rem] text-slate-300 mt-6 pb-2 font-medium">
-        PlugPoint v1.0.0 • Peer-to-Peer Charging
+      <p style={{
+        textAlign: "center", fontSize: "0.62rem",
+        color: "#d1d5db", marginTop: "20px", paddingBottom: "8px",
+        fontWeight: 500,
+      }}>
+        PlugPoint v1.0.0 • Peer-to-Peer EV Charging
       </p>
 
-      {/* TOP-UP MODAL */}
+      {/* ═══════════════ TOP-UP MODAL ═══════════════ */}
       {isTopUpOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50" onClick={() => !isToppingUp && setIsTopUpOpen(false)} />
@@ -334,11 +561,9 @@ export function ProfilePage() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
             <p className="text-slate-500 text-[0.85rem] mb-4">
               Add funds to your PlugPoint wallet for seamless, one-tap booking. Current balance: <strong className="text-slate-800">₹{user.walletBalance || 0}</strong>
             </p>
-
             <div className="mb-4">
               <label className="text-[0.8rem] font-bold text-slate-600 mb-1 block">Amount (₹)</label>
               <input
@@ -349,7 +574,6 @@ export function ProfilePage() {
                 min="50"
               />
             </div>
-
             <div className="flex gap-2 mb-5">
               {[100, 500, 1000].map(amt => (
                 <button
@@ -363,13 +587,12 @@ export function ProfilePage() {
                 </button>
               ))}
             </div>
-
             <button
               onClick={handleTopUp}
               disabled={isToppingUp || topUpAmount < 50}
               className="w-full bg-primary text-white font-bold py-3.5 rounded-xl shadow-lg shadow-primary/20 flex justify-center items-center gap-2 hover:bg-primary/90 transition-colors disabled:opacity-50"
             >
-              {isToppingUp ? <><Loader2 className="w-5 h-5 animate-spin" /> Processing...</> : `Pay ₹${topUpAmount}`}
+              {isToppingUp ? <><Loader2 className="w-5 h-5 animate-spin" />Processing...</> : `Pay ₹${topUpAmount}`}
             </button>
           </div>
         </div>

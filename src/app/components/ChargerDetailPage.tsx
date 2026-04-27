@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { useParams, useNavigate } from "react-router";
 import {
   ArrowLeft,
@@ -28,8 +28,9 @@ import {
 import { useApp } from "../context/AppContext";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { StarRating } from "./StarRating";
-import { BookingModal } from "./BookingModal";
 import { ChatModal } from "./ChatModal";
+
+const BookingModal = lazy(() => import("./BookingModal").then((m) => ({ default: m.BookingModal })));
 
 // Amenity icons mapping
 const amenityIcons: Record<string, any> = {
@@ -330,10 +331,16 @@ export function ChargerDetailPage() {
 
       {/* The actual Booking Wizard (opens when button is clicked) */}
       {showBooking && (
-        <BookingModal
-          charger={charger}
-          onClose={() => setShowBooking(false)}
-        />
+        <Suspense fallback={
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 text-white text-sm font-bold">
+            Loading booking...
+          </div>
+        }>
+          <BookingModal
+            charger={charger}
+            onClose={() => setShowBooking(false)}
+          />
+        </Suspense>
       )}
       
       {showChat && (

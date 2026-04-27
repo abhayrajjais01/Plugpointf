@@ -4,6 +4,7 @@ import { Zap, MapPin, Camera, IndianRupee, Clock, Info, CheckCircle, ArrowRight,
 import { motion, AnimatePresence } from "motion/react";
 import { useApp } from "../context/AppContext";
 import { uploadChargerImage } from "../../lib/db";
+import { geocodeAddress } from "../../services/geocoding";
 import type { Charger } from "../data/mock-data";
 
 // Options for the dropdowns
@@ -66,7 +67,7 @@ export function ListChargerPage() {
   // Prevents the user from clicking 'Next' if they haven't filled in the basics
   const canProceed = () => {
     switch (step) {
-      case 1: return title && description && address;
+      case 1: return title && description && address && city;
       case 2: return connectorType && power;
       case 3: return pricePerHour && availableHours;
       case 4: return true;
@@ -90,6 +91,8 @@ export function ListChargerPage() {
     setError(null);
 
     try {
+      const location = await geocodeAddress(address, city);
+
       // 1. If the user picked a custom photo, upload it to Supabase Storage first
       let imageUrl = FALLBACK_IMAGE;
       if (imageFile) {
@@ -110,9 +113,8 @@ export function ListChargerPage() {
         image: imageUrl,
         address,
         city,
-        // We pick a random spot in Bangalore if they didn't provide GPS coords
-        lat: 12.93 + Math.random() * 0.08,
-        lng: 77.56 + Math.random() * 0.18,
+        lat: location.lat,
+        lng: location.lng,
         connectorType,
         power: parseFloat(power) || 7.2,
         pricePerHour: parseFloat(pricePerHour) || 80,
@@ -236,6 +238,12 @@ export function ListChargerPage() {
                 <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="e.g. #42, MG Road"
                   className="w-full pl-11 pr-4 py-3.5 border border-slate-100 rounded-2xl bg-slate-50 text-[0.9rem] font-bold outline-none focus:border-primary focus:bg-white transition-all shadow-sm" />
               </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[0.75rem] text-slate-400 font-black uppercase tracking-wider">City / Area *</label>
+              <input type="text" value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g., Bangalore, KA"
+                className="w-full px-4 py-3.5 border border-slate-100 rounded-2xl bg-slate-50 text-[0.9rem] font-bold outline-none focus:border-primary focus:bg-white transition-all shadow-sm" />
             </div>
 
             {/* THE PHOTO UPLOAD SECTION */}
