@@ -19,4 +19,19 @@ export default defineConfig({
 
   // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
   assetsInclude: ['**/*.svg', '**/*.csv'],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return;
+          if (id.includes('maplibre-gl')) return 'maplibre';
+          if (id.includes('firebase')) return 'firebase';
+          if (id.includes('@supabase')) return 'supabase';
+          if (id.includes('@mui')) return 'mui';
+          if (id.includes('react') || id.includes('scheduler')) return 'react-vendor';
+          if (id.includes('lucide-react')) return 'icons';
+        },
+      },
+    },
+  },
 })
