@@ -31,7 +31,7 @@ export function BookingsPage() {
   const navigate = useNavigate();
   
   // cancelBooking is a function from AppContext that talks to the database
-  const { bookings, cancelBooking, chargers } = useApp();
+  const { bookings, cancelBooking, chargers, reviews } = useApp();
   
   // --- UI STATE ---
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("All");
@@ -276,13 +276,20 @@ export function BookingsPage() {
                 {/* 3. Completed: Show Leave Review */}
                 {booking.status === "completed" && (
                   <div className="flex gap-2 px-3.5 pb-3.5 pt-1">
-                    <button
-                      onClick={() => setReviewBooking(booking)}
-                      className="flex-1 py-2 text-[0.75rem] font-bold bg-primary text-white rounded-xl shadow-sm shadow-primary/10 flex items-center justify-center gap-1.5"
-                    >
-                      <Star className="w-3.5 h-3.5 fill-white" />
-                      Rate Experience
-                    </button>
+                    {reviews.some((r) => r.bookingId === booking.id) ? (
+                      <div className="flex-1 py-2 text-[0.75rem] font-bold bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-100 flex items-center justify-center gap-1.5">
+                        <CheckCircle className="w-3.5 h-3.5" />
+                        Rated
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setReviewBooking(booking)}
+                        className="flex-1 py-2 text-[0.75rem] font-bold bg-primary text-white rounded-xl shadow-sm shadow-primary/10 flex items-center justify-center gap-1.5"
+                      >
+                        <Star className="w-3.5 h-3.5 fill-white" />
+                        Rate Experience
+                      </button>
+                    )}
                     <button
                       onClick={() => navigate(`/charger/${booking.chargerId}`)}
                       className="flex-1 py-2 text-[0.75rem] font-semibold border border-slate-100 rounded-xl hover:bg-slate-50 transition-colors text-slate-600"

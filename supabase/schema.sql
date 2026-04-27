@@ -1,10 +1,24 @@
 -- ============================================================
--- PlugPoint Database Schema
+-- PlugPoint Unified & Hardened Database Schema
 -- Paste this entire file into: Supabase → SQL Editor → Run
 -- ============================================================
 
+-- 1. CLEANUP (Optional - only if starting fresh)
+-- DROP TABLE IF EXISTS public.messages CASCADE;
+-- DROP TABLE IF EXISTS public.conversations CASCADE;
+-- DROP TABLE IF EXISTS public.user_vehicles CASCADE;
+-- DROP TABLE IF EXISTS public.wallet_transactions CASCADE;
+-- DROP TABLE IF EXISTS public.reviews CASCADE;
+-- DROP TABLE IF EXISTS public.bookings CASCADE;
+-- DROP TABLE IF EXISTS public.chargers CASCADE;
+-- DROP TABLE IF EXISTS public.profiles CASCADE;
+
+-- ============================================================
+-- Core Tables
+-- ============================================================
+
 -- Profiles (synced from Firebase Auth on login)
-CREATE TABLE IF NOT EXISTS profiles (
+CREATE TABLE IF NOT EXISTS public.profiles (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL DEFAULT 'User',
   avatar_url TEXT DEFAULT 'https://i.pravatar.cc/150?img=33',
@@ -15,14 +29,14 @@ CREATE TABLE IF NOT EXISTS profiles (
   total_bookings INTEGER DEFAULT 0,
   rating NUMERIC(3,1) DEFAULT 5.0,
   verified BOOLEAN DEFAULT false,
-  wallet_balance NUMERIC(10,2) DEFAULT 50000.00,
+  wallet_balance NUMERIC(10,2) DEFAULT 0.00,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Chargers
-CREATE TABLE IF NOT EXISTS chargers (
+CREATE TABLE IF NOT EXISTS public.chargers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  owner_id TEXT NOT NULL,
+  owner_id TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   owner_name TEXT,
   owner_avatar TEXT,
   owner_rating NUMERIC(3,1) DEFAULT 5.0,
@@ -48,14 +62,14 @@ CREATE TABLE IF NOT EXISTS chargers (
 );
 
 -- Bookings
-CREATE TABLE IF NOT EXISTS bookings (
+CREATE TABLE IF NOT EXISTS public.bookings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  charger_id UUID REFERENCES chargers(id) ON DELETE SET NULL,
+  charger_id UUID REFERENCES public.chargers(id) ON DELETE SET NULL,
   charger_title TEXT,
   charger_image TEXT,
   charger_address TEXT,
   host_name TEXT,
-  user_id TEXT NOT NULL,
+  user_id TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   date TEXT,
   start_time TEXT,
   end_time TEXT,
@@ -68,10 +82,11 @@ CREATE TABLE IF NOT EXISTS bookings (
 );
 
 -- Reviews
-CREATE TABLE IF NOT EXISTS reviews (
+CREATE TABLE IF NOT EXISTS public.reviews (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  charger_id UUID REFERENCES chargers(id) ON DELETE CASCADE,
-  user_id TEXT NOT NULL,
+  charger_id UUID REFERENCES public.chargers(id) ON DELETE CASCADE,
+  booking_id UUID REFERENCES public.bookings(id) ON DELETE SET NULL,
+  user_id TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   user_name TEXT,
   user_avatar TEXT,
   rating INTEGER CHECK (rating BETWEEN 1 AND 5),
@@ -81,9 +96,9 @@ CREATE TABLE IF NOT EXISTS reviews (
 );
 
 -- Wallet Transactions
-CREATE TABLE IF NOT EXISTS wallet_transactions (
+CREATE TABLE IF NOT EXISTS public.wallet_transactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id TEXT REFERENCES profiles(id) ON DELETE CASCADE,
+  user_id TEXT REFERENCES public.profiles(id) ON DELETE CASCADE,
   amount NUMERIC(10,2) NOT NULL,
   type TEXT CHECK (type IN ('credit', 'debit')),
   description TEXT,
@@ -91,62 +106,208 @@ CREATE TABLE IF NOT EXISTS wallet_transactions (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- User Vehicles (Cross-device sync)
+CREATE TABLE IF NOT EXISTS public.user_vehicles (
+  id TEXT PRIMARY KEY, -- Using client-side generated ID for sync
+  user_id TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  model_id TEXT,
+  brand_name TEXT,
+  model_name TEXT,
+  image_url TEXT,
+  logo_url TEXT,
+  registration_number TEXT,
+  is_active BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Chat System
+CREATE TABLE IF NOT EXISTS public.conversations (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  listing_id uuid NOT NULL REFERENCES public.chargers(id) ON DELETE CASCADE,
+  host_id TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  customer_id TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
+  last_message text,
+  last_message_at timestamptz,
+  host_unread_count int DEFAULT 0,
+  customer_unread_count int DEFAULT 0,
+  UNIQUE(listing_id, customer_id)
+);
+
+CREATE TABLE IF NOT EXISTS public.messages (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  conversation_id uuid NOT NULL REFERENCES public.conversations(id) ON DELETE CASCADE,
+  sender_id TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  content text NOT NULL,
+  created_at timestamptz DEFAULT now(),
+  is_read boolean DEFAULT false
+);
+
 -- ============================================================
--- Row Level Security (permissive for MVP)
+-- Functions & Triggers
 -- ============================================================
-ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE chargers ENABLE ROW LEVEL SECURITY;
-ALTER TABLE bookings ENABLE ROW LEVEL SECURITY;
-ALTER TABLE reviews ENABLE ROW LEVEL SECURITY;
-ALTER TABLE wallet_transactions ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "profiles_all" ON profiles FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "chargers_all" ON chargers FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "bookings_all" ON bookings FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "reviews_all" ON reviews FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "wallet_tx_all" ON wallet_transactions FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+-- A. Auto-update Charger Rating on New Review
+CREATE OR REPLACE FUNCTION public.handle_new_review()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE public.chargers
+  SET 
+    rating = (SELECT ROUND(AVG(rating)::numeric, 1) FROM public.reviews WHERE charger_id = NEW.charger_id),
+    review_count = (SELECT COUNT(*) FROM public.reviews WHERE charger_id = NEW.charger_id)
+  WHERE id = NEW.charger_id;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_review_added ON public.reviews;
+CREATE TRIGGER on_review_added
+  AFTER INSERT OR UPDATE OR DELETE ON public.reviews
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_review();
+
+-- B. Auto-update Wallet Balance on New Transaction
+CREATE OR REPLACE FUNCTION public.handle_wallet_transaction()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.type = 'credit' THEN
+    UPDATE public.profiles
+    SET wallet_balance = wallet_balance + NEW.amount
+    WHERE id = NEW.user_id;
+  ELSIF NEW.type = 'debit' THEN
+    UPDATE public.profiles
+    SET wallet_balance = wallet_balance - NEW.amount
+    WHERE id = NEW.user_id;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_wallet_tx ON public.wallet_transactions;
+CREATE TRIGGER on_wallet_tx
+  AFTER INSERT ON public.wallet_transactions
+  FOR EACH ROW EXECUTE FUNCTION public.handle_wallet_transaction();
+
+-- C. Update Conversation Timestamp on New Message
+CREATE OR REPLACE FUNCTION public.handle_new_message()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE public.conversations
+  SET updated_at = NOW()
+  WHERE id = NEW.conversation_id;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_message_added ON public.messages;
+CREATE TRIGGER on_message_added
+  AFTER INSERT ON public.messages
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_message();
 
 -- ============================================================
--- Seed: 6 demo chargers
+-- Row Level Security (Hardened)
 -- ============================================================
-INSERT INTO chargers (owner_id, owner_name, owner_avatar, owner_rating, title, description, image_url, address, city, lat, lng, connector_type, power, price_per_hour, price_per_kwh, available, available_hours, rating, review_count, amenities, instructions, verified)
-VALUES
-  ('seed_host_01','Priya Sharma','https://i.pravatar.cc/150?img=5',4.8,'Koramangala Home Charger','Level 2 charger in my garage, easily accessible from the main road. Covered parking spot with good lighting. Available most evenings and weekends.','https://images.unsplash.com/photo-1765272088009-100c96a4cd4e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080','4th Cross, 6th Block, Koramangala','Bangalore, KA',12.9352,77.6245,'J1772',7.2,80,12,true,'6 PM - 8 AM weekdays, All day weekends',4.8,23,ARRAY['Covered Parking','Well Lit','WiFi Nearby','Pet Friendly'],'Enter from the 4th Cross side gate. Park on the left side. The charger is mounted on the wall.',true),
-  ('seed_host_02','Rahul Verma','https://i.pravatar.cc/150?img=12',4.6,'Fast Charge Hub - Indiranagar','High-power Level 2 charger perfect for a quick top-up. Located in a secure gated community with 24/7 camera surveillance.','https://images.unsplash.com/photo-1762117360986-9753aef7680f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080','12th Main, HAL 2nd Stage, Indiranagar','Bangalore, KA',12.9784,77.6408,'Tesla Wall Connector',11.5,120,15,true,'24/7',4.6,41,ARRAY['Gated Access','Security Camera','Covered Parking','Restroom Nearby'],'Enter gate code #4523. Parking spot B12. Charger is on the right wall.',true),
-  ('seed_host_03','Ananya Reddy','https://i.pravatar.cc/150?img=23',4.9,'Jayanagar Driveway Charger','Convenient residential charger with easy street access. Perfect for overnight charging while you explore the neighbourhood.','https://images.unsplash.com/photo-1631347826177-de288776ed3b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080','32nd Cross, 4th Block, Jayanagar','Bangalore, KA',12.9250,77.5838,'CCS',9.6,100,14,true,'8 AM - 10 PM daily',4.9,17,ARRAY['Street Parking','Well Lit','Coffee Shop Nearby','Parks Nearby'],'Park in the designated spot on the driveway. Please text when you arrive.',true),
-  ('seed_host_04','Vikram Nair','https://i.pravatar.cc/150?img=15',4.7,'Whitefield Tech Park Charger','Charger in my building''s parking garage near ITPL. Great location if you want to charge while at work.','https://images.unsplash.com/photo-1752830132482-def8649b6432?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080','ITPL Main Road, Whitefield','Bangalore, KA',12.9698,77.7500,'J1772',7.2,90,13,false,'7 AM - 11 PM daily',4.7,31,ARRAY['Underground Parking','Security Camera','Tech Park Access','Restroom'],'Enter underground garage from ITPL Main Road entrance. Spot G-14.',true),
-  ('seed_host_05','Deepa Iyer','https://i.pravatar.cc/150?img=44',4.5,'HSR Layout Quick Charge','High-speed charger in my apartment building''s basement. Central HSR location, close to restaurants and cafes.','https://images.unsplash.com/photo-1765272088039-a6f6b9188199?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080','27th Main, Sector 2, HSR Layout','Bangalore, KA',12.9116,77.6389,'Tesla Wall Connector',11.5,130,16,true,'6 AM - 12 AM daily',4.5,19,ARRAY['Garage Parking','Elevator Access','Security','EV Friendly Building'],'Text me when you arrive. I''ll meet you at the basement entrance.',false),
-  ('seed_host_06','Karthik Rao','https://i.pravatar.cc/150?img=51',4.8,'Malleshwaram Premium Charger','Premium residential charger in a quiet heritage neighbourhood.','https://images.unsplash.com/photo-1651688730796-151972ba8f87?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080','15th Cross, Malleshwaram','Bangalore, KA',12.9965,77.5713,'CCS',9.6,150,18,true,'9 AM - 9 PM daily',4.8,12,ARRAY['Private Driveway','Scenic View','Quiet Area','Well Lit'],'Drive up to the house and park in the second spot. The charger is clearly marked.',true);
+
+-- Helper to get Firebase UID from JWT
+CREATE OR REPLACE FUNCTION public.current_app_user_id()
+RETURNS TEXT LANGUAGE SQL STABLE AS $$
+  SELECT NULLIF(auth.jwt() ->> 'sub', '');
+$$;
+
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.chargers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.reviews ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.wallet_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_vehicles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
+
+-- 1. Profiles: Users can read all, but only edit their own
+DROP POLICY IF EXISTS "profiles_read_all" ON public.profiles;
+CREATE POLICY "profiles_read_all" ON public.profiles FOR SELECT TO anon, authenticated USING (true);
+
+DROP POLICY IF EXISTS "profiles_insert_own" ON public.profiles;
+CREATE POLICY "profiles_insert_own" ON public.profiles FOR INSERT TO authenticated WITH CHECK (id = public.current_app_user_id());
+
+DROP POLICY IF EXISTS "profiles_update_own" ON public.profiles;
+CREATE POLICY "profiles_update_own" ON public.profiles FOR UPDATE TO authenticated USING (id = public.current_app_user_id()) WITH CHECK (id = public.current_app_user_id());
+
+-- PROTECT WALLET BALANCE: Only triggers can update it
+REVOKE UPDATE (wallet_balance) ON public.profiles FROM anon, authenticated;
+
+-- 2. Chargers: All can see, only owner can edit
+DROP POLICY IF EXISTS "chargers_read_all" ON public.chargers;
+CREATE POLICY "chargers_read_all" ON public.chargers FOR SELECT TO anon, authenticated USING (true);
+
+DROP POLICY IF EXISTS "chargers_insert_own" ON public.chargers;
+CREATE POLICY "chargers_insert_own" ON public.chargers FOR INSERT TO authenticated WITH CHECK (owner_id = public.current_app_user_id());
+
+DROP POLICY IF EXISTS "chargers_update_own" ON public.chargers;
+CREATE POLICY "chargers_update_own" ON public.chargers FOR UPDATE TO authenticated USING (owner_id = public.current_app_user_id());
+
+DROP POLICY IF EXISTS "chargers_delete_own" ON public.chargers;
+CREATE POLICY "chargers_delete_own" ON public.chargers FOR DELETE TO authenticated USING (owner_id = public.current_app_user_id());
+
+-- 3. Bookings: Involved parties only
+DROP POLICY IF EXISTS "bookings_read_own" ON public.bookings;
+CREATE POLICY "bookings_read_own" ON public.bookings FOR SELECT TO authenticated 
+  USING (user_id = public.current_app_user_id() OR EXISTS (SELECT 1 FROM chargers WHERE id = charger_id AND owner_id = public.current_app_user_id()));
+
+DROP POLICY IF EXISTS "bookings_insert_own" ON public.bookings;
+CREATE POLICY "bookings_insert_own" ON public.bookings FOR INSERT TO authenticated WITH CHECK (user_id = public.current_app_user_id());
+
+DROP POLICY IF EXISTS "bookings_update_own" ON public.bookings;
+CREATE POLICY "bookings_update_own" ON public.bookings FOR UPDATE TO authenticated USING (user_id = public.current_app_user_id());
+
+-- 4. Reviews: Read all, edit own
+DROP POLICY IF EXISTS "reviews_read_all" ON public.reviews;
+CREATE POLICY "reviews_read_all" ON public.reviews FOR SELECT TO anon, authenticated USING (true);
+
+DROP POLICY IF EXISTS "reviews_insert_own" ON public.reviews;
+CREATE POLICY "reviews_insert_own" ON public.reviews FOR INSERT TO authenticated WITH CHECK (user_id = public.current_app_user_id());
+
+-- 5. Wallet: Read own only
+DROP POLICY IF EXISTS "wallet_read_own" ON public.wallet_transactions;
+CREATE POLICY "wallet_read_own" ON public.wallet_transactions FOR SELECT TO authenticated USING (user_id = public.current_app_user_id());
+
+DROP POLICY IF EXISTS "wallet_insert_own" ON public.wallet_transactions;
+CREATE POLICY "wallet_insert_own" ON public.wallet_transactions FOR INSERT TO authenticated WITH CHECK (user_id = public.current_app_user_id());
+
+-- 6. User Vehicles: Read/write own only
+DROP POLICY IF EXISTS "vehicles_all_own" ON public.user_vehicles;
+CREATE POLICY "vehicles_all_own" ON public.user_vehicles FOR ALL TO authenticated USING (user_id = public.current_app_user_id()) WITH CHECK (user_id = public.current_app_user_id());
+
+-- 7. Chat System: Participants only
+DROP POLICY IF EXISTS "conv_read_own" ON public.conversations;
+CREATE POLICY "conv_read_own" ON public.conversations FOR SELECT TO authenticated USING (host_id = public.current_app_user_id() OR customer_id = public.current_app_user_id());
+
+DROP POLICY IF EXISTS "conv_insert_own" ON public.conversations;
+CREATE POLICY "conv_insert_own" ON public.conversations FOR INSERT TO authenticated WITH CHECK (customer_id = public.current_app_user_id());
+
+DROP POLICY IF EXISTS "msg_read_own" ON public.messages;
+CREATE POLICY "msg_read_own" ON public.messages FOR SELECT TO authenticated USING (EXISTS (SELECT 1 FROM conversations WHERE id = conversation_id AND (host_id = public.current_app_user_id() OR customer_id = public.current_app_user_id())));
+
+DROP POLICY IF EXISTS "msg_insert_own" ON public.messages;
+CREATE POLICY "msg_insert_own" ON public.messages FOR INSERT TO authenticated WITH CHECK (sender_id = public.current_app_user_id());
 
 -- ============================================================
--- Seed: Reviews (references chargers by title)
+-- Enable Realtime (Safe Reset)
 -- ============================================================
-INSERT INTO reviews (charger_id, user_id, user_name, user_avatar, rating, comment)
-SELECT id,'seed_u08','Rohan Kulkarni','https://i.pravatar.cc/150?img=8',5,'Excellent charger! Priya was super friendly. Covered parking is a huge plus. Will definitely book again.' FROM chargers WHERE title='Koramangala Home Charger';
+-- 1. Drop the existing publication if it exists to avoid "already member" errors
+DROP PUBLICATION IF EXISTS supabase_realtime;
 
-INSERT INTO reviews (charger_id, user_id, user_name, user_avatar, rating, comment)
-SELECT id,'seed_u09','Sneha Patel','https://i.pravatar.cc/150?img=20',5,'Great location and the charger worked perfectly. Left my car for 3 hours and came back to a full charge!' FROM chargers WHERE title='Koramangala Home Charger';
-
-INSERT INTO reviews (charger_id, user_id, user_name, user_avatar, rating, comment)
-SELECT id,'seed_u10','Aditya Joshi','https://i.pravatar.cc/150?img=60',4,'Good charger, easy to find. The cable was a bit short but we made it work. Nice neighbourhood.' FROM chargers WHERE title='Koramangala Home Charger';
-
-INSERT INTO reviews (charger_id, user_id, user_name, user_avatar, rating, comment)
-SELECT id,'seed_u11','Kavya Srinivas','https://i.pravatar.cc/150?img=32',5,'Fast charging speed and super secure location. Rahul is a great host!' FROM chargers WHERE title='Fast Charge Hub - Indiranagar';
-
-INSERT INTO reviews (charger_id, user_id, user_name, user_avatar, rating, comment)
-SELECT id,'seed_u12','Nikhil Hegde','https://i.pravatar.cc/150?img=53',4,'Solid charger with good power output. The gate code system works well.' FROM chargers WHERE title='Fast Charge Hub - Indiranagar';
-
-INSERT INTO reviews (charger_id, user_id, user_name, user_avatar, rating, comment)
-SELECT id,'seed_u13','Meera Gupta','https://i.pravatar.cc/150?img=41',5,'Ananya is the best host! She texted me detailed instructions. Perfect experience.' FROM chargers WHERE title='Jayanagar Driveway Charger';
-
-INSERT INTO reviews (charger_id, user_id, user_name, user_avatar, rating, comment)
-SELECT id,'seed_u14','Suresh Baliga','https://i.pravatar.cc/150?img=14',5,'Amazing location right by ITPL. Charged my car while working at the tech park!' FROM chargers WHERE title='Whitefield Tech Park Charger';
-
-INSERT INTO reviews (charger_id, user_id, user_name, user_avatar, rating, comment)
-SELECT id,'seed_u15','Divya Krishnan','https://i.pravatar.cc/150?img=26',4,'Good central location in HSR. Deepa was helpful getting me into the basement.' FROM chargers WHERE title='HSR Layout Quick Charge';
+-- 2. Create it fresh and add all necessary tables
+CREATE PUBLICATION supabase_realtime FOR TABLE 
+  public.profiles, 
+  public.chargers, 
+  public.bookings, 
+  public.conversations, 
+  public.messages;
 
 -- ============================================================
 -- Storage bucket: charger-images
--- Create this manually in Supabase → Storage → New bucket
+-- Create manually in Supabase Dashboard → Storage → New bucket
 -- Name: charger-images  |  Public: YES
 -- ============================================================
+

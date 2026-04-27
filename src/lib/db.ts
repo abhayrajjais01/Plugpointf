@@ -3,6 +3,7 @@
 
 import { supabase } from "../config/supabase";
 import type { Charger, Booking, Review } from "../app/data/mock-data";
+import type { UserVehicle } from "../app/data/ev-data";
 import { format } from "date-fns";
 
 /**
@@ -83,6 +84,7 @@ function mapReview(row: any): Review {
   return {
     id: row.id,
     chargerId: row.charger_id,
+    bookingId: row.booking_id,
     userId: row.user_id,
     userName: row.user_name,
     userAvatar: row.user_avatar,
@@ -90,6 +92,19 @@ function mapReview(row: any): Review {
     comment: row.comment,
     date: row.created_at ? format(new Date(row.created_at), "MMM d, yyyy") : "Recently",
     helpful: row.helpful ?? 0,
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapVehicle(row: any): UserVehicle {
+  return {
+    id: row.id,
+    modelId: row.model_id,
+    brandName: row.brand_name,
+    modelName: row.model_name,
+    image: row.image_url,
+    logoUrl: row.logo_url,
+    registrationNumber: row.registration_number,
   };
 }
 
@@ -244,22 +259,17 @@ export async function updateBookingStatus(
 
 // Fetch all bookings made on chargers owned by a specific host
 export async function fetchHostBookings(hostId: string): Promise<Booking[]> {
-  // Step 1: Get all charger IDs owned by this host
-  const { data: chargerRows, error: chargerError } = await supabase
-    .from("chargers")
-    .select("id")
-    .eq("owner_id", hostId);
-  if (chargerError || !chargerRows || chargerRows.length === 0) return [];
-
-  const chargerIds = chargerRows.map((r: any) => r.id);
-
-  // Step 2: Fetch bookings on those chargers
+  // Use a single joined query for efficiency
   const { data, error } = await supabase
     .from("bookings")
-    .select("*")
-    .in("charger_id", chargerIds)
+    .select("*, chargers!inner(*)")
+    .eq("chargers.owner_id", hostId)
     .order("created_at", { ascending: false });
-  if (error) { console.error("fetchHostBookings:", error.message); return []; }
+
+  if (error) { 
+    console.error("fetchHostBookings:", error.message); 
+    return []; 
+  }
   return (data ?? []).map(mapBooking);
 }
 
@@ -275,12 +285,13 @@ export async function fetchReviews(): Promise<Review[]> {
 }
 
 export async function insertReview(
-  review: Pick<Review, "chargerId" | "userId" | "userName" | "userAvatar" | "rating" | "comment">
+  review: Pick<Review, "chargerId" | "bookingId" | "userId" | "userName" | "userAvatar" | "rating" | "comment">
 ): Promise<Review | null> {
   const { data, error } = await supabase
     .from("reviews")
     .insert({
       charger_id: review.chargerId,
+      booking_id: review.bookingId,
       user_id: review.userId,
       user_name: review.userName,
       user_avatar: review.userAvatar,
@@ -290,25 +301,24 @@ export async function insertReview(
     .select()
     .single();
   if (error) { console.error("insertReview:", error.message); return null; }
-  // Recalculate charger average rating
-  await recalcChargerRating(review.chargerId);
+  // Note: Charger rating and review_count are automatically updated by DB triggers.
   return mapReview(data);
 }
 
-async function recalcChargerRating(chargerId: string) {
-  const { data } = await supabase
-    .from("reviews")
-    .select("rating")
-    .eq("charger_id", chargerId);
-  if (!data || data.length === 0) return;
-  const avg = data.reduce((s, r) => s + r.rating, 0) / data.length;
-  await supabase
-    .from("chargers")
-    .update({ rating: Math.round(avg * 10) / 10, review_count: data.length })
-    .eq("id", chargerId);
-}
-
 // ─── PROFILES (USER INFO) ──────────────────────────────────────
+
+export async function fetchProfile(id: string) {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (error) {
+    console.error("fetchProfile error:", error.message);
+    return null;
+  }
+  return data;
+}
 
 // "Upsert" is a mix of Update + Insert.
 // If the user already exists, update their info. If they are new, create them!
@@ -346,25 +356,9 @@ export async function fetchWalletBalance(userId: string): Promise<number> {
 }
 
 export async function updateWalletBalance(userId: string, changeAmount: number, type: 'credit' | 'debit', description: string, referenceId?: string): Promise<boolean> {
-  // 1. Get current balance
-  const currentBalance = await fetchWalletBalance(userId);
-  const newBalance = currentBalance + (type === 'credit' ? changeAmount : -changeAmount);
-
-  if (newBalance < 0) return false; // Insufficient funds
-
-  // 2. Update balance
-  const { error: updateError } = await supabase
-    .from("profiles")
-    .update({ wallet_balance: newBalance })
-    .eq("id", userId);
-
-  if (updateError) {
-    console.error("updateWalletBalance:", updateError.message);
-    return false;
-  }
-
-  // 3. Record transaction
-  await supabase.from("wallet_transactions").insert({
+  // 1. Record transaction
+  // The database trigger 'on_wallet_tx' will automatically update the profile's wallet_balance
+  const { error } = await supabase.from("wallet_transactions").insert({
     user_id: userId,
     amount: changeAmount,
     type,
@@ -372,6 +366,55 @@ export async function updateWalletBalance(userId: string, changeAmount: number, 
     reference_id: referenceId
   });
 
+  if (error) {
+    console.error("updateWalletBalance error:", error.message);
+    return false;
+  }
+
+  return true;
+}
+
+// ─── USER VEHICLES ──────────────────────────────────────────
+
+export async function fetchUserVehicles(userId: string): Promise<UserVehicle[]> {
+  const { data, error } = await supabase
+    .from("user_vehicles")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.error("fetchUserVehicles error:", error.message);
+    return [];
+  }
+  return (data ?? []).map(mapVehicle);
+}
+
+export async function upsertUserVehicle(userId: string, vehicle: UserVehicle): Promise<boolean> {
+  const { error } = await supabase.from("user_vehicles").upsert({
+    id: vehicle.id,
+    user_id: userId,
+    model_id: vehicle.modelId,
+    brand_name: vehicle.brandName,
+    model_name: vehicle.modelName,
+    image_url: vehicle.image,
+    logo_url: vehicle.logoUrl,
+    registration_number: vehicle.registrationNumber,
+  });
+
+  if (error) {
+    console.error("upsertUserVehicle error:", error.message);
+    return false;
+  }
+  return true;
+}
+
+export async function deleteUserVehicle(id: string): Promise<boolean> {
+  const { error } = await supabase.from("user_vehicles").delete().eq("id", id);
+  if (error) {
+    console.error("deleteUserVehicle error:", error.message);
+    return false;
+  }
   return true;
 }
 

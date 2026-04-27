@@ -5,6 +5,7 @@ import { evBrands, evModels, UserVehicle } from "../data/ev-data";
 import { toast } from "sonner";
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { ImageWithFallback } from "./figma/ImageWithFallback";
 
 function cn(...inputs: (string | undefined | null | false)[]) {
   return twMerge(clsx(inputs));
@@ -16,7 +17,7 @@ interface EvSetupModalProps {
 }
 
 export function EvSetupModal({ isOpen, onClose }: EvSetupModalProps) {
-  const { myVehicles, setMyVehicles, activeVehicle, setActiveVehicle } = useApp();
+  const { myVehicles, setMyVehicles, addVehicle, removeVehicle, activeVehicle, setActiveVehicle } = useApp();
   
   // default to 'add' view if user has no vehicles
   const [view, setView] = useState<"selector" | "add">("selector");
@@ -55,7 +56,7 @@ export function EvSetupModal({ isOpen, onClose }: EvSetupModalProps) {
 
   if (!isOpen) return null;
 
-  const handleAddVehicle = () => {
+  const handleAddVehicle = async () => {
     if (!selectedModel) return;
     const modelData = evModels.find((m) => m.id === selectedModel);
     if (!modelData) return;
@@ -71,15 +72,19 @@ export function EvSetupModal({ isOpen, onClose }: EvSetupModalProps) {
       registrationNumber: registrationNumber || undefined,
     };
 
-    setMyVehicles((prev) => [...prev, newVehicle]);
-    if (myVehicles.length === 0) {
-      setActiveVehicle(newVehicle);
+    const success = await addVehicle(newVehicle);
+    if (success) {
+      if (myVehicles.length === 0) {
+        setActiveVehicle(newVehicle);
+      }
+      toast.success(`${newVehicle.modelName} added!`);
+      setView("selector");
+      setTempActiveVehicleId(newVehicle.id);
+      setShowRegistrationPrompt(false);
+      setRegistrationNumber("");
+    } else {
+      toast.error("Failed to save vehicle to your profile.");
     }
-    toast.success(`${newVehicle.modelName} added!`);
-    setView("selector");
-    setTempActiveVehicleId(newVehicle.id);
-    setShowRegistrationPrompt(false);
-    setRegistrationNumber("");
   };
 
   const handleApplySelector = () => {
@@ -125,8 +130,8 @@ export function EvSetupModal({ isOpen, onClose }: EvSetupModalProps) {
                           : "border-slate-100/50 bg-white shadow-sm hover:border-slate-200"
                       )}
                     >
-                      <div className="w-24 h-16 mb-2 rounded-lg overflow-hidden flex items-center justify-center">
-                        <img src={vehicle.image} alt={vehicle.modelName} className="object-cover w-full h-full mix-blend-multiply" />
+                      <div className="w-24 h-16 mb-2 rounded-lg overflow-hidden flex items-center justify-center bg-slate-50">
+                        <ImageWithFallback src={vehicle.image} alt={vehicle.modelName} className="object-contain w-full h-full p-1" />
                       </div>
                       <div className="text-center w-full">
                         <p className={cn("text-[0.8rem] font-bold leading-tight", isSelected ? "text-emerald-900" : "text-slate-800")}>{vehicle.brandName}</p>
@@ -192,8 +197,8 @@ export function EvSetupModal({ isOpen, onClose }: EvSetupModalProps) {
                   key={vehicle.id}
                   className="flex flex-col items-center justify-center p-3 rounded-2xl border-2 border-emerald-400 bg-emerald-50 cursor-pointer min-w-[140px] snap-center shrink-0"
                 >
-                  <div className="w-24 h-16 mb-2 rounded-lg overflow-hidden flex items-center justify-center">
-                    <img src={vehicle.image} alt={vehicle.modelName} className="object-cover w-full h-full mix-blend-multiply" />
+                  <div className="w-24 h-16 mb-2 rounded-lg overflow-hidden flex items-center justify-center bg-slate-50">
+                    <ImageWithFallback src={vehicle.image} alt={vehicle.modelName} className="object-contain w-full h-full p-1" />
                   </div>
                   <div className="text-center w-full">
                     <p className="text-[0.8rem] font-bold leading-tight text-emerald-900">{vehicle.brandName} {vehicle.modelName.replace(vehicle.brandName, "").trim()}</p>
@@ -258,7 +263,7 @@ export function EvSetupModal({ isOpen, onClose }: EvSetupModalProps) {
                   )}
                 >
                   <div className="w-full h-20 mb-3 rounded-lg overflow-hidden flex items-center justify-center bg-slate-50">
-                     <img src={model.image} alt={model.name} className="object-cover w-full h-full mix-blend-multiply" />
+                     <ImageWithFallback src={model.image} alt={model.name} className="object-contain w-full h-full p-2" />
                   </div>
                   <p className={cn("text-center text-[0.85rem] font-bold leading-tight", isSelected ? "text-primary" : "text-slate-800")}>
                     {model.name}
