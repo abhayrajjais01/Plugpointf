@@ -7,7 +7,7 @@ import {
   BatteryCharging, Play
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
-import type { Charger } from "../data/mock-data";
+import type { Charger } from "../../types";
 import { fetchChargerBookingsByDate } from "../../lib/db";
 
 declare var Razorpay: any;

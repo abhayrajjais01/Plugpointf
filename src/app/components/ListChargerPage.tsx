@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { useApp } from "../context/AppContext";
 import { uploadChargerImage } from "../../lib/db";
 import { geocodeAddress } from "../../services/geocoding";
-import type { Charger } from "../data/mock-data";
+import type { Charger } from "../../types";
 
 // Options for the dropdowns
 const connectorOptions = ["J1772", "CCS", "Tesla Wall Connector", "CHAdeMO"];

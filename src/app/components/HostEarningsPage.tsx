@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { fetchHostBookings } from "../../lib/db";
-import type { Booking } from "../data/mock-data";
+import type { Booking } from "../../types";
 import { toast } from "sonner";
 
 /**

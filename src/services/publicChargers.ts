@@ -1,4 +1,4 @@
-import type { Charger } from "../app/data/mock-data";
+import type { Charger } from "../types";
 
 interface OpenChargeMapPoi {
   ID: number | string;

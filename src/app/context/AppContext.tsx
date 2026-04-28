@@ -5,12 +5,13 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from "react";
 
 // These "types" define what a User or a Charger object must look like
-import {
-  type User,
-  type Charger,
-  type Booking,
-  type Review,
-} from "../data/mock-data";
+import type {
+  User,
+  Charger,
+  Booking,
+  Review,
+  TripState,
+} from "../../types";
 
 import type { UserVehicle } from "../data/ev-data";
 
@@ -69,24 +70,8 @@ interface AppState {
   fetchPublicChargersForRoute: (polyline: string, distance?: number) => Promise<void>;
   isNavigating: boolean;
   setIsNavigating: React.Dispatch<React.SetStateAction<boolean>>;
-  tripState: {
-    origin: string;
-    destination: string;
-    isLoading: boolean;
-    routeData: any | null;
-    distance: number | null;
-    duration: number | null;
-    error: string | null;
-  };
-  setTripState: React.Dispatch<React.SetStateAction<{
-    origin: string;
-    destination: string;
-    isLoading: boolean;
-    routeData: any | null;
-    distance: number | null;
-    duration: number | null;
-    error: string | null;
-  }>>;
+  tripState: TripState;
+  setTripState: React.Dispatch<React.SetStateAction<TripState>>;
   myVehicles: UserVehicle[];
   setMyVehicles: (v: UserVehicle[]) => void;
   addVehicle: (v: UserVehicle) => Promise<boolean>;
@@ -115,13 +100,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [dataLoading, setDataLoading] = useState(true);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [isNavigating, setIsNavigating] = useState(false);
-  const [tripState, setTripState] = useState<{
-    origin: string;
-    destination: string;
-    isLoading: boolean;
-    routeData: any | null;
-    error: string | null;
-  }>({
+  const [tripState, setTripState] = useState<TripState>({
     origin: "",
     destination: "",
     isLoading: false,

@@ -1,61 +1,55 @@
-**Add your own guidelines here**
-<!--
+# PlugPoint — Contributor Guidelines
 
-System Guidelines
+## Tech Stack
+- **Frontend**: React 18, TypeScript, Vite
+- **Styling**: Tailwind CSS v4 (utility-first)
+- **Database**: Supabase (PostgreSQL + Realtime + Storage)
+- **Auth**: Firebase Authentication (Email/Password + Google)
+- **Mapping**: MapLibre GL JS
+- **Payments**: Razorpay SDK + PlugPoint Wallet
 
-Use this file to provide the AI with rules and guidelines you want it to follow.
-This template outlines a few examples of things you can add. You can add your own sections and format it to suit your needs
+## Project Conventions
 
-TIP: More context isn't always better. It can confuse the LLM. Try and add the most important rules you need
+### File Organization
+- **Types**: All shared interfaces live in `src/types/index.ts` — never define types inline or in mock-data files.
+- **Utilities**: Shared logic lives in `src/lib/` (e.g., `geo.ts`, `logger.ts`, `db.ts`).
+- **Components**: One component per file in `src/app/components/`.
+- **Services**: External API integrations in `src/services/`.
 
-# General guidelines
+### Code Style
+- Use `import type { ... }` for type-only imports.
+- Prefer named exports over default exports (except `App.tsx`).
+- Use the `logger` utility (`src/lib/logger.ts`) instead of raw `console.log` — it auto-strips in production.
+- Use `date-fns` for all date parsing/formatting — never use `new Date(string)` for locale-dependent formats.
 
-Any general rules you want the AI to follow.
-For example:
+### Database (Supabase)
+- All DB functions live in `src/lib/db.ts`.
+- Mapper functions convert between Postgres `snake_case` and JS `camelCase`.
+- Wallet transactions use Postgres triggers for atomicity — see `schema.sql`.
 
-* Only use absolute positioning when necessary. Opt for responsive and well structured layouts that use flexbox and grid by default
-* Refactor code as you go to keep code clean
-* Keep file sizes small and put helper functions and components in their own files.
+### Naming
+- Components: `PascalCase.tsx` (e.g., `HomePage.tsx`)
+- Utilities: `camelCase.ts` (e.g., `geo.ts`)
+- CSS variables: defined in `src/styles/theme.css`
+- DB columns: `snake_case` (Postgres standard)
 
---------------
+### Environment Variables
+All secrets go in `.env` (not committed). Required variables:
+```
+VITE_FIREBASE_API_KEY
+VITE_FIREBASE_AUTH_DOMAIN
+VITE_FIREBASE_PROJECT_ID
+VITE_FIREBASE_STORAGE_BUCKET
+VITE_FIREBASE_MESSAGING_SENDER_ID
+VITE_FIREBASE_APP_ID
+VITE_SUPABASE_URL
+VITE_SUPABASE_ANON_KEY
+VITE_RAZORPAY_KEY_ID
+VITE_OCM_API_KEY (optional)
+```
 
-# Design system guidelines
-Rules for how the AI should make generations look like your company's design system
-
-Additionally, if you select a design system to use in the prompt box, you can reference
-your design system's components, tokens, variables and components.
-For example:
-
-* Use a base font-size of 14px
-* Date formats should always be in the format “Jun 10”
-* The bottom toolbar should only ever have a maximum of 4 items
-* Never use the floating action button with the bottom toolbar
-* Chips should always come in sets of 3 or more
-* Don't use a dropdown if there are 2 or fewer options
-
-You can also create sub sections and add more specific details
-For example:
-
-
-## Button
-The Button component is a fundamental interactive element in our design system, designed to trigger actions or navigate
-users through the application. It provides visual feedback and clear affordances to enhance user experience.
-
-### Usage
-Buttons should be used for important actions that users need to take, such as form submissions, confirming choices,
-or initiating processes. They communicate interactivity and should have clear, action-oriented labels.
-
-### Variants
-* Primary Button
-  * Purpose : Used for the main action in a section or page
-  * Visual Style : Bold, filled with the primary brand color
-  * Usage : One primary button per section to guide users toward the most important action
-* Secondary Button
-  * Purpose : Used for alternative or supporting actions
-  * Visual Style : Outlined with the primary color, transparent background
-  * Usage : Can appear alongside a primary button for less important actions
-* Tertiary Button
-  * Purpose : Used for the least important actions
-  * Visual Style : Text-only with no border, using primary color
-  * Usage : For actions that should be available but not emphasized
--->
+## Getting Started
+```bash
+npm install
+npm run dev
+```

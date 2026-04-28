@@ -2,9 +2,9 @@
 // We use these functions to save and load data permanently.
 
 import { supabase } from "../config/supabase";
-import type { Charger, Booking, Review } from "../app/data/mock-data";
+import type { Charger, Booking, Review } from "../types";
 import type { UserVehicle } from "../app/data/ev-data";
-import { format } from "date-fns";
+import { format, parse } from "date-fns";
 
 /**
  * --- WHAT ARE MAPPERS? ---
@@ -48,16 +48,19 @@ function mapBooking(row: any): Booking {
   // Only auto-update logical time statuses (ignore manually cancelled ones)
   if (computedStatus !== "cancelled") {
     const now = new Date();
-    // Assuming row.date is "Apr 19, 2026" and row.end_time is "6:00 PM"
-    const startDateTime = new Date(`${row.date} ${row.start_time}`);
-    const endDateTime = new Date(`${row.date} ${row.end_time}`);
+    // Use date-fns parse with explicit format to avoid locale-dependent Date parsing.
+    // row.date is "Apr 19, 2026", row.start_time/end_time are "6:00 PM"
+    const startDateTime = parse(`${row.date} ${row.start_time}`, "MMM d, yyyy h:mm a", new Date());
+    const endDateTime = parse(`${row.date} ${row.end_time}`, "MMM d, yyyy h:mm a", new Date());
 
-    if (now > endDateTime) {
-      computedStatus = "completed";
-    } else if (now >= startDateTime && now <= endDateTime) {
-      computedStatus = "active";
-    } else {
-      computedStatus = "upcoming";
+    if (!isNaN(startDateTime.getTime()) && !isNaN(endDateTime.getTime())) {
+      if (now > endDateTime) {
+        computedStatus = "completed";
+      } else if (now >= startDateTime && now <= endDateTime) {
+        computedStatus = "active";
+      } else {
+        computedStatus = "upcoming";
+      }
     }
   }
 

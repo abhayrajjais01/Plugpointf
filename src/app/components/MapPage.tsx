@@ -31,15 +31,17 @@ import { useApp } from "../context/AppContext";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { ChargerCard } from "./ChargerCard";
 import { EvSetupModal } from "./EvSetupModal";
-import type { Charger } from "../data/mock-data";
+import type { Charger } from "../../types";
 import { encodePolyline } from "../../lib/polyline";
+import { getDistance } from "../../lib/geo";
 
 // --- MAP SETTINGS ---
 // This is the starting point for our map (Bangalore city coordinates)
 const MAP_CENTER: [number, number] = [77.63, 12.96]; // [longitude, latitude]
 
-// We use "MapLibre" to show the map, but we want it to look like Google Maps.
-// This configuration tells MapLibre to pull "tiles" (images of the world) from Google's servers.
+// WARNING: This endpoint is NOT an official Google API and may violate Google's ToS.
+// For production, switch to an official tile provider (OSM, Mapbox, or Google Maps JS API).
+// OSM alternative: tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png']
 const GOOGLE_MAP_STYLE: maplibregl.StyleSpecification = {
   version: 8,
   sources: {
@@ -62,22 +64,7 @@ const GOOGLE_MAP_STYLE: maplibregl.StyleSpecification = {
 };
 
 // --- MATH HELPERS ---
-// This math formula (Haversine) calculates the real-world distance between two GPS points in kilometers.
-function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 6371; // The Earth's radius is roughly 6371 km
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
-
-// This checks how far a charger is from a driving route. 
+// minDistanceFromChargerToRoute checks how far a charger is from a driving route.
 // It looks at every point on the route line and finds the closest one.
 function minDistanceFromChargerToRoute(charger: Charger, routeCoords: [number, number][]) {
   let minDistance = Infinity;

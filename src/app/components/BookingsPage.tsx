@@ -16,7 +16,7 @@ import { useApp } from "../context/AppContext";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { ReviewModal } from "./ReviewModal";
 import { ChatModal } from "./ChatModal";
-import type { Booking } from "../data/mock-data";
+import type { Booking } from "../../types";
 
 // These are the categories a booking can fall into
 const tabs = ["All", "Upcoming", "Active", "Completed", "Cancelled"] as const;

@@ -2,6 +2,9 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 import { Zap, Mail, Lock, User, Eye, EyeOff, ArrowLeft } from "lucide-react";
 import { useApp } from "../context/AppContext";
+import { sendPasswordResetEmail } from "firebase/auth";
+import { auth } from "../../config/firebase";
+import { toast } from "sonner";
 
 /**
  * --- THE AUTH PAGE ---
@@ -169,7 +172,22 @@ export function AuthPage() {
 
           {isLogin && (
             <div className="text-right">
-              <button type="button" className="text-[0.75rem] text-primary font-semibold hover:underline">
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!email) {
+                    setError("Please enter your email address first");
+                    return;
+                  }
+                  try {
+                    await sendPasswordResetEmail(auth, email);
+                    toast.success("Password reset email sent! Check your inbox.");
+                  } catch (err: any) {
+                    setError(err.message || "Failed to send reset email.");
+                  }
+                }}
+                className="text-[0.75rem] text-primary font-semibold hover:underline"
+              >
                 Forgot password?
               </button>
             </div>

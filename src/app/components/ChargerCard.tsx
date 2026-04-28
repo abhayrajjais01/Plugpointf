@@ -3,7 +3,7 @@ import { motion } from "motion/react";
 import { MapPin, Zap, Clock, Shield, Star } from "lucide-react";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { StarRating } from "./StarRating";
-import type { Charger } from "../data/mock-data";
+import type { Charger } from "../../types";
 
 interface ChargerCardProps {
   charger: Charger;

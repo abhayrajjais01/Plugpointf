@@ -2,7 +2,7 @@ import { useState } from "react";
 import { X, CheckCircle, Loader2 } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { StarRating } from "./StarRating";
-import type { Booking } from "../data/mock-data";
+import type { Booking } from "../../types";
 
 interface ReviewModalProps {
   booking: Booking;
