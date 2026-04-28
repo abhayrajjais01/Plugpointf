@@ -29,8 +29,12 @@ import {
   updateCharger as dbUpdateCharger,
   deleteCharger as dbDeleteCharger,
   upsertProfile,
+  fetchProfile,
   fetchWalletBalance,
   updateWalletBalance,
+  fetchUserVehicles,
+  upsertUserVehicle,
+  deleteUserVehicle as dbDeleteUserVehicle,
 } from "../../lib/db";
 import {
   fetchPublicChargersAlongRoute,
@@ -53,11 +57,12 @@ interface AppState {
   logout: () => Promise<void>;
   addBooking: (booking: Omit<Booking, "id">) => Promise<Booking | null>;
   cancelBooking: (id: string) => Promise<void>;
-  addReview: (review: Pick<Review, "chargerId" | "userId" | "userName" | "userAvatar" | "rating" | "comment">) => Promise<void>;
+  addReview: (review: Pick<Review, "chargerId" | "bookingId" | "userId" | "userName" | "userAvatar" | "rating" | "comment">) => Promise<void>;
   addCharger: (charger: Omit<Charger, "id">) => Promise<Charger | null>;
   updateCharger: (id: string, updates: Partial<Omit<Charger, "id">>) => Promise<boolean>;
   deleteCharger: (id: string) => Promise<boolean>;
   refreshBookings: () => Promise<void>;
+  updateProfile: (updates: Partial<Pick<User, "name" | "phone" | "avatar">>) => Promise<boolean>;
   topUpWallet: (amount: number, paymentId: string) => Promise<boolean>;
   payWithWallet: (amount: number, description: string) => Promise<boolean>;
   fetchPublicChargers: (lat: number, lng: number) => Promise<void>;
@@ -83,7 +88,9 @@ interface AppState {
     error: string | null;
   }>>;
   myVehicles: UserVehicle[];
-  setMyVehicles: React.Dispatch<React.SetStateAction<UserVehicle[]>>;
+  setMyVehicles: (v: UserVehicle[]) => void;
+  addVehicle: (v: UserVehicle) => Promise<boolean>;
+  removeVehicle: (id: string) => Promise<boolean>;
   activeVehicle: UserVehicle | null;
   setActiveVehicle: React.Dispatch<React.SetStateAction<UserVehicle | null>>;
 }
@@ -127,62 +134,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [myVehicles, setMyVehicles] = useState<UserVehicle[]>([]);
   const [activeVehicle, setActiveVehicle] = useState<UserVehicle | null>(null);
 
-  // Load EVs on mount
+  // 1. Load Vehicles from Supabase on mount/login
   useEffect(() => {
-    const savedVehicles = localStorage.getItem("plugpoint_my_vehicles");
-    const savedActive = localStorage.getItem("plugpoint_active_vehicle_id");
-    
-    // Migration: If no myVehicles exist, check for legacy plugpoint_my_ev
-    if (!savedVehicles) {
-      const legacyEv = localStorage.getItem("plugpoint_my_ev");
-      if (legacyEv) {
-        try {
-          const parsed = JSON.parse(legacyEv);
-          type LegacyEVDetails = { make: string; model: string; image?: string; pluginType?: string };
-          const details: LegacyEVDetails = parsed;
-          const migratedVehicle: UserVehicle = {
-            id: "legacy_" + Date.now(),
-            modelId: "legacy",
-            brandName: details.make || "Unknown",
-            modelName: details.model || details.make || "My EV",
-            image: details.image || "/cars/ev-placeholder.svg",
-            logoUrl: ""
-          };
-          setMyVehicles([migratedVehicle]);
-          setActiveVehicle(migratedVehicle);
-          // Remove legacy key after migration
-          localStorage.removeItem("plugpoint_my_ev");
-          return; // Exit early as we've initialized with legacy data
-        } catch (e) {
-          console.error("Failed to migrate legacy EV data", e);
-        }
-      }
-    }
-
-    if (savedVehicles) {
-      try {
-        const parsed = JSON.parse(savedVehicles);
-        setMyVehicles(parsed);
-        if (savedActive) {
-          const active = parsed.find((v: UserVehicle) => v.id === savedActive);
+    if (user) {
+      fetchUserVehicles(user.id).then((vehicles) => {
+        setMyVehicles(vehicles);
+        // Set active vehicle from localStorage or first in list
+        const savedActiveId = localStorage.getItem("plugpoint_active_vehicle_id");
+        if (savedActiveId) {
+          const active = vehicles.find((v) => v.id === savedActiveId);
           if (active) setActiveVehicle(active);
-        } else if (parsed.length > 0) {
-          setActiveVehicle(parsed[0]);
+          else if (vehicles.length > 0) setActiveVehicle(vehicles[0]);
+        } else if (vehicles.length > 0) {
+          setActiveVehicle(vehicles[0]);
         }
-      } catch (e) {}
+      });
+    } else {
+      setMyVehicles([]);
+      setActiveVehicle(null);
     }
-  }, []);
+  }, [user]);
 
-  // Save vehicles whenever they change
-  useEffect(() => {
-    localStorage.setItem("plugpoint_my_vehicles", JSON.stringify(myVehicles));
-  }, [myVehicles]);
-
+  // 2. Persist active vehicle ID only
   useEffect(() => {
     if (activeVehicle) {
-       localStorage.setItem("plugpoint_active_vehicle_id", activeVehicle.id);
+      localStorage.setItem("plugpoint_active_vehicle_id", activeVehicle.id);
     } else {
-       localStorage.removeItem("plugpoint_active_vehicle_id");
+      localStorage.removeItem("plugpoint_active_vehicle_id");
     }
   }, [activeVehicle]);
 
@@ -231,45 +209,51 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Every time the Firebase login status changes (logged in or out), 
   // we update our local "User" object so the rest of the app knows who is browsing.
   useEffect(() => {
-    if (firebaseUser) {
-      // If a user is logged in, create a standard "User" object
-      const appUser: User = {
-        id: firebaseUser.uid,
-        name: firebaseUser.displayName || "User",
-        avatar: firebaseUser.photoURL || "https://i.pravatar.cc/150?img=33",
-        email: firebaseUser.email || "",
-        phone: firebaseUser.phoneNumber || "+91 99999 00000",
-        joinedDate: "March 2026",
-        chargersListed: 0,
-        totalBookings: 0,
-        rating: 5.0,
-        verified: !!firebaseUser.emailVerified,
-        walletBalance: 50000,
-      };
-      setUser(appUser);
+    const syncUser = async () => {
+      if (firebaseUser) {
+        // Try to get existing profile from Supabase first
+        const dbProfile = await fetchProfile(firebaseUser.uid);
+        
+        const appUser: User = {
+          id: firebaseUser.uid,
+          name: dbProfile?.name || firebaseUser.displayName || "User",
+          avatar: dbProfile?.avatar_url || firebaseUser.photoURL || "https://i.pravatar.cc/150?img=33",
+          email: firebaseUser.email || dbProfile?.email || "",
+          phone: dbProfile?.phone || firebaseUser.phoneNumber || "+91 99999 00000",
+          joinedDate: dbProfile?.joined_date || "March 2026",
+          chargersListed: dbProfile?.chargers_listed || 0,
+          totalBookings: dbProfile?.total_bookings || 0,
+          rating: Number(dbProfile?.rating) || 5.0,
+          verified: !!firebaseUser.emailVerified,
+          walletBalance: Number(dbProfile?.wallet_balance) || 50000,
+        };
+        
+        setUser(appUser);
 
-      // We also sync this info to our own Supabase 'profiles' table 
-      // so we can store extra details like their phone number or custom avatar.
-      upsertProfile({
-        id: firebaseUser.uid,
-        name: appUser.name,
-        avatar: appUser.avatar,
-        email: appUser.email,
-        phone: appUser.phone,
-      });
+        // Still call upsert to ensure sync (handles first-time setup or minor updates)
+        if (!dbProfile) {
+          await upsertProfile({
+            id: firebaseUser.uid,
+            name: appUser.name,
+            avatar: appUser.avatar,
+            email: appUser.email,
+            phone: appUser.phone,
+          });
+        }
 
-      fetchWalletBalance(firebaseUser.uid).then(balance => {
-        setUser(prev => prev ? { ...prev, walletBalance: balance } : null);
-      });
+        // Fetch other user-specific data
+        fetchBookings(firebaseUser.uid).then(setBookings);
+        fetchUserVehicles(firebaseUser.uid).then(setMyVehicles);
+      } else {
+        setUser(null);
+        setBookings([]);
+        setMyVehicles([]);
+        setActiveVehicle(null);
+      }
+    };
 
-      // Finally, load all the bookings that belong to this specific user.
-      fetchBookings(firebaseUser.uid).then(setBookings);
-    } else {
-      // If logged out, clear the user and their bookings
-      setUser(null);
-      setBookings([]);
-    }
-  }, [firebaseUser]); // This effect re-runs only if firebaseUser changes
+    syncUser();
+  }, [firebaseUser]);
 
   const login = async (email: string, password: string) => {
     await firebaseLogin(email, password);
@@ -302,7 +286,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const addReview = async (
-    review: Pick<Review, "chargerId" | "userId" | "userName" | "userAvatar" | "rating" | "comment">
+    review: Pick<Review, "chargerId" | "bookingId" | "userId" | "userName" | "userAvatar" | "rating" | "comment">
   ) => {
     const saved = await dbInsertReview(review);
     if (!saved) return;
@@ -340,6 +324,44 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return true;
     }
     return false;
+  };
+
+  const updateProfile = async (updates: Partial<Pick<User, "name" | "phone" | "avatar">>) => {
+    if (!firebaseUser || !user) return false;
+    
+    try {
+      await upsertProfile({
+        id: firebaseUser.uid,
+        name: updates.name || user.name,
+        avatar: updates.avatar || user.avatar,
+        email: user.email,
+        phone: updates.phone || user.phone,
+      });
+      setUser({ ...user, ...updates });
+      return true;
+    } catch (error) {
+      console.error("updateProfile error:", error);
+      return false;
+    }
+  };
+
+  const addVehicle = async (vehicle: UserVehicle) => {
+    if (!user) return false;
+    const success = await upsertUserVehicle(user.id, vehicle);
+    if (success) {
+      setMyVehicles(prev => [...prev, vehicle]);
+    }
+    return success;
+  };
+
+  const removeVehicle = async (id: string) => {
+    if (!user) return false;
+    const success = await dbDeleteUserVehicle(id);
+    if (success) {
+      setMyVehicles(prev => prev.filter(v => v.id !== id));
+      if (activeVehicle?.id === id) setActiveVehicle(null);
+    }
+    return success;
   };
 
   const refreshBookings = async () => {
@@ -418,6 +440,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         updateCharger,
         deleteCharger,
         refreshBookings,
+        updateProfile,
         topUpWallet,
         payWithWallet,
         fetchPublicChargers,
@@ -428,6 +451,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setTripState,
         myVehicles,
         setMyVehicles,
+        addVehicle,
+        removeVehicle,
         activeVehicle,
         setActiveVehicle,
       }}

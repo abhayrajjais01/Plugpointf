@@ -67,6 +67,7 @@ export interface Booking {
 export interface Review {
   id: string;
   chargerId: string;
+  bookingId: string | null;
   userId: string;
   userName: string;
   userAvatar: string;

@@ -37,6 +37,7 @@ export function ReviewModal({ booking, onClose }: ReviewModalProps) {
       // Send the review data to our database helper
       await addReview({
         chargerId: booking.chargerId,
+        bookingId: booking.id,
         userId: user.id,
         userName: user.name,
         userAvatar: user.avatar,

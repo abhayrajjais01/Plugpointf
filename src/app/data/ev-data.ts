@@ -21,7 +21,7 @@ export interface UserVehicle {
   registrationNumber?: string;
 }
 
-const DEFAULT_EV_IMAGE = "/cars/ev-placeholder.svg";
+const DEFAULT_EV_IMAGE = "https://cdn-icons-png.flaticon.com/512/3202/3202926.png";
 
 export const evBrands: EVBrand[] = [
   { id: "b1", name: "Tata", logoUrl: "https://upload.wikimedia.org/wikipedia/commons/8/8e/Tata_logo.svg" },

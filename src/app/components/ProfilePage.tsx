@@ -26,6 +26,7 @@ import {
 import { useApp } from "../context/AppContext";
 import { toast } from "sonner";
 import { EvSetupModal } from "./EvSetupModal";
+import { ProfileEditModal } from "./ProfileEditModal";
 
 declare var Razorpay: any;
 
@@ -47,6 +48,7 @@ export function ProfilePage() {
   const [topUpAmount, setTopUpAmount] = useState<number>(500);
   const [isToppingUp, setIsToppingUp] = useState(false);
   const [isEvSetupOpen, setIsEvSetupOpen] = useState(false);
+  const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
 
   const { user, isAuthenticated, logout, bookings, chargers, reviews, topUpWallet, activeVehicle } = useApp();
 
@@ -210,7 +212,7 @@ export function ProfilePage() {
 
             {/* Edit icon (pencil) */}
             <button
-              onClick={() => toast.info("Profile editing coming soon!")}
+              onClick={() => setIsEditProfileOpen(true)}
               style={{
                 width: "36px", height: "36px", borderRadius: "50%",
                 background: "rgba(255,255,255,0.6)",
@@ -600,6 +602,9 @@ export function ProfilePage() {
 
       {/* EV SETUP MODAL */}
       <EvSetupModal isOpen={isEvSetupOpen} onClose={() => setIsEvSetupOpen(false)} />
+
+      {/* PROFILE EDIT MODAL */}
+      <ProfileEditModal isOpen={isEditProfileOpen} onClose={() => setIsEditProfileOpen(false)} />
     </div>
   );
 }
