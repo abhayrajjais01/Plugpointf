@@ -15,7 +15,7 @@ import {
   CalendarDays,
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
-import { fetchHostBookings } from "../../lib/db";
+import { fetchHostBookings, updateBookingsCashedOutStatus } from "../../lib/db";
 import type { Booking } from "../data/mock-data";
 import { toast } from "sonner";
 
@@ -48,7 +48,7 @@ export function HostEarningsPage() {
   }, [user]);
 
   // --- EARNINGS MATH ---
-  const completedBookings = hostBookings.filter((b) => b.status === "completed");
+  const completedBookings = hostBookings.filter((b) => b.status === "completed" && !b.cashedOut);
   const upcomingBookings = hostBookings.filter((b) => b.status === "upcoming");
   const cancelledBookings = hostBookings.filter((b) => b.status === "cancelled");
 
@@ -67,13 +67,28 @@ export function HostEarningsPage() {
       return;
     }
     setCashingOut(true);
-    // Simulate a brief server delay
-    await new Promise((r) => setTimeout(r, 1500));
+    
+    const bookingIdsToCashout = completedBookings.map((b) => b.id);
+    const dbSuccess = await updateBookingsCashedOutStatus(bookingIdsToCashout, true);
+    
+    if (!dbSuccess) {
+      toast.error("Failed to process cashout. Please try again.");
+      setCashingOut(false);
+      return;
+    }
+
     // Credit to wallet
     const success = await topUpWallet(netEarnings, `host-cashout-${Date.now()}`);
     if (success) {
       toast.success(`₹${netEarnings} has been added to your PlugPoint Wallet!`);
+      setHostBookings((prev) =>
+        prev.map((b) =>
+          bookingIdsToCashout.includes(b.id) ? { ...b, cashedOut: true } : b
+        )
+      );
     } else {
+      // Rollback database update if wallet credit failed
+      await updateBookingsCashedOutStatus(bookingIdsToCashout, false);
       toast.error("Cashout failed. Please try again.");
     }
     setCashingOut(false);

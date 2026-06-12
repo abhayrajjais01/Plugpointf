@@ -76,6 +76,7 @@ function mapBooking(row: any): Booking {
     status: computedStatus,
     connectorType: row.connector_type,
     power: Number(row.power),
+    cashedOut: !!row.cashed_out,
   };
 }
 
@@ -255,6 +256,21 @@ export async function updateBookingStatus(
     .update({ status })
     .eq("id", id);
   if (error) console.error("updateBookingStatus:", error.message);
+}
+
+export async function updateBookingsCashedOutStatus(
+  ids: string[],
+  cashedOut: boolean
+): Promise<boolean> {
+  const { error } = await supabase
+    .from("bookings")
+    .update({ cashed_out: cashedOut })
+    .in("id", ids);
+  if (error) {
+    console.error("updateBookingsCashedOutStatus:", error.message);
+    return false;
+  }
+  return true;
 }
 
 // Fetch all bookings made on chargers owned by a specific host

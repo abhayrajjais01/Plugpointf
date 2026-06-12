@@ -225,7 +225,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           totalBookings: dbProfile?.total_bookings || 0,
           rating: Number(dbProfile?.rating) || 5.0,
           verified: !!firebaseUser.emailVerified,
-          walletBalance: Number(dbProfile?.wallet_balance) || 50000,
+          walletBalance: dbProfile ? Number(dbProfile.wallet_balance) : 0.00,
         };
         
         setUser(appUser);
@@ -279,6 +279,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const cancelBooking = async (id: string) => {
+    const booking = bookings.find((b) => b.id === id);
+    if (booking && firebaseUser) {
+      const success = await updateWalletBalance(
+        firebaseUser.uid,
+        booking.totalCost,
+        "credit",
+        `Refund for cancelled booking: ${booking.chargerTitle}`,
+        `refund-${id}`
+      );
+      if (success) {
+        setUser((prev) =>
+          prev ? { ...prev, walletBalance: prev.walletBalance + booking.totalCost } : null
+        );
+      }
+    }
     await updateBookingStatus(id, "cancelled");
     setBookings((prev) =>
       prev.map((b) => (b.id === id ? { ...b, status: "cancelled" as const } : b))

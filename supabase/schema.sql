@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   total_bookings INTEGER DEFAULT 0,
   rating NUMERIC(3,1) DEFAULT 5.0,
   verified BOOLEAN DEFAULT false,
-  wallet_balance NUMERIC(10,2) DEFAULT 0.00,
+  wallet_balance NUMERIC(10,2) DEFAULT 0.00 CHECK (wallet_balance >= 0.00),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -78,6 +78,7 @@ CREATE TABLE IF NOT EXISTS public.bookings (
   status TEXT DEFAULT 'upcoming' CHECK (status IN ('upcoming','active','completed','cancelled')),
   connector_type TEXT,
   power NUMERIC(5,2),
+  cashed_out BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
