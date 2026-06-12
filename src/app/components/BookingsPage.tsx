@@ -17,6 +17,7 @@ import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { ReviewModal } from "./ReviewModal";
 import { ChatModal } from "./ChatModal";
 import type { Booking } from "../data/mock-data";
+import { toast } from "sonner";
 
 // These are the categories a booking can fall into
 const tabs = ["All", "Upcoming", "Active", "Completed", "Cancelled"] as const;
@@ -324,9 +325,16 @@ export function BookingsPage() {
                 Keep it
               </button>
               <button
-                onClick={() => {
-                  cancelBooking(cancelConfirm); // Tell the app to cancel this ID in the database
-                  setCancelConfirm(null);
+                onClick={async () => {
+                  if (cancelConfirm) {
+                    try {
+                      await cancelBooking(cancelConfirm);
+                      toast.success("Booking cancelled successfully!");
+                      setCancelConfirm(null);
+                    } catch (error: any) {
+                      toast.error(error.message || "Failed to cancel booking");
+                    }
+                  }
                 }}
                 className="flex-1 py-2.5 bg-red-500 text-white rounded-xl text-[0.85rem] font-bold shadow-md shadow-red-500/15"
               >

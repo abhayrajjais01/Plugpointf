@@ -62,6 +62,8 @@ export interface Booking {
   status: "upcoming" | "active" | "completed" | "cancelled";
   connectorType: string;
   power: number;
+  cashedOut?: boolean;
+  rollbackFailed?: boolean;
 }
 
 export interface Review {
