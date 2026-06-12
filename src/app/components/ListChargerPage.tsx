@@ -310,6 +310,15 @@ export function ListChargerPage() {
             </div>
 
             <div className="space-y-1.5">
+              <label className="text-[0.75rem] text-slate-400 font-black uppercase tracking-wider">Price per kWh (₹)</label>
+              <div className="relative">
+                <IndianRupee className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
+                <input type="number" value={pricePerKwh} onChange={(e) => setPricePerKwh(e.target.value)} placeholder="e.g., 12"
+                  className="w-full pl-11 pr-4 py-3.5 border border-slate-100 rounded-2xl bg-slate-50 text-[1.1rem] font-black outline-none focus:border-primary transition-all shadow-sm" />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
               <label className="text-[0.75rem] text-slate-400 font-black uppercase tracking-wider">Available Hours *</label>
               <div className="relative">
                 <Clock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
@@ -326,6 +335,44 @@ export function ListChargerPage() {
                   <p className="text-[0.85rem] font-bold text-slate-800">Earnings Potential</p>
                   <p className="text-[0.7rem] text-slate-500 font-medium tracking-tight">You could earn up to <span className="text-primary font-black">₹{((parseFloat(pricePerHour) || 0) * 100).toLocaleString()}</span> per month.</p>
                </div>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 4: AMENITIES & ACCESS INSTRUCTIONS */}
+        {step === 4 && (
+          <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
+            <div className="space-y-3">
+              <label className="text-[0.75rem] text-slate-400 font-black uppercase tracking-wider">Amenities Nearby</label>
+              <div className="grid grid-cols-2 gap-2">
+                {amenityOptions.map((amenity) => {
+                  const isSelected = selectedAmenities.includes(amenity);
+                  return (
+                    <button
+                      key={amenity}
+                      type="button"
+                      onClick={() => toggleAmenity(amenity)}
+                      className={`px-3 py-2.5 rounded-xl text-[0.75rem] font-bold border transition-colors text-left ${
+                        isSelected
+                          ? "bg-primary text-white border-primary shadow-sm"
+                          : "bg-slate-50 text-slate-500 border-slate-100 hover:border-slate-200"
+                      }`}
+                    >
+                      {amenity}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[0.75rem] text-slate-400 font-black uppercase tracking-wider">Access Instructions</label>
+              <textarea
+                value={instructions}
+                onChange={(e) => setInstructions(e.target.value)}
+                placeholder="e.g. Enter from the side gate, park on the left. Cable reaches most spots."
+                className="w-full h-28 px-4 py-3.5 border border-slate-100 rounded-2xl bg-slate-50 text-[0.9rem] font-medium resize-none outline-none focus:border-primary focus:bg-white transition-all shadow-sm"
+              />
             </div>
           </div>
         )}
