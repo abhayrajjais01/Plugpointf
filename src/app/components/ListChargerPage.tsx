@@ -103,6 +103,7 @@ export function ListChargerPage() {
       }
 
       // 2. Prepare the final "Charger" object
+      const parsedPricePerKwh = parseFloat(pricePerKwh) || 12;
       const charger: Omit<Charger, "id"> = {
         ownerId: user.id,
         ownerName: user.name,
@@ -118,7 +119,7 @@ export function ListChargerPage() {
         connectorType,
         power: parseFloat(power) || 7.2,
         pricePerHour: parseFloat(pricePerHour) || 80,
-        pricePerKwh: parseFloat(pricePerKwh) || 12,
+        pricePerKwh: parsedPricePerKwh < 0 ? 0 : parsedPricePerKwh,
         available: true,
         availableHours,
         rating: 0,
@@ -313,7 +314,7 @@ export function ListChargerPage() {
               <label className="text-[0.75rem] text-slate-400 font-black uppercase tracking-wider">Price per kWh (₹)</label>
               <div className="relative">
                 <IndianRupee className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
-                <input type="number" value={pricePerKwh} onChange={(e) => setPricePerKwh(e.target.value)} placeholder="e.g., 12"
+                <input type="number" value={pricePerKwh} onChange={(e) => setPricePerKwh(e.target.value)} placeholder="e.g., 12" min="0" step="0.01" inputMode="decimal"
                   className="w-full pl-11 pr-4 py-3.5 border border-slate-100 rounded-2xl bg-slate-50 text-[1.1rem] font-black outline-none focus:border-primary transition-all shadow-sm" />
               </div>
             </div>
