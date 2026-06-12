@@ -144,7 +144,11 @@ export function MapPage() {
       if (suggestionTimeout.current) clearTimeout(suggestionTimeout.current);
       suggestionTimeout.current = setTimeout(async () => {
         try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(val + ", India")}&limit=4`);
+          const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(val + ", India")}&limit=4`, {
+            headers: {
+              "User-Agent": "PlugPoint-EV-App/1.0.0 (contact@plugpoint.com)",
+            },
+          });
           const data = await res.json();
           setDestSuggestions(data);
           setShowSuggestions(true);
@@ -224,7 +228,12 @@ export function MapPage() {
         const oRes = await fetch(
           `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
             tripState.origin + ", India"
-          )}&limit=1`
+          )}&limit=1`,
+          {
+            headers: {
+              "User-Agent": "PlugPoint-EV-App/1.0.0 (contact@plugpoint.com)",
+            },
+          }
         );
         const oData = await oRes.json();
         if (!oData.length) throw new Error("Could not find origin address");
@@ -235,7 +244,12 @@ export function MapPage() {
       const dRes = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
           tripState.destination + ", India"
-        )}&limit=1`
+        )}&limit=1`,
+        {
+          headers: {
+            "User-Agent": "PlugPoint-EV-App/1.0.0 (contact@plugpoint.com)",
+          },
+        }
       );
       const dData = await dRes.json();
       if (!dData.length) throw new Error("Could not find destination address");
@@ -286,7 +300,11 @@ export function MapPage() {
 
       const reverseGeocode = async (lat: number, lon: number): Promise<string> => {
         try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`, {
+            headers: {
+              "User-Agent": "PlugPoint-EV-App/1.0.0 (contact@plugpoint.com)",
+            },
+          });
           const data = await res.json();
           const addr = data.address;
           if (!addr) return "My Location";
