@@ -63,6 +63,7 @@ export interface Booking {
   connectorType: string;
   power: number;
   cashedOut?: boolean;
+  rollbackFailed?: boolean;
 }
 
 export interface Review {

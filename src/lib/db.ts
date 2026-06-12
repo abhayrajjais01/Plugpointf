@@ -262,6 +262,7 @@ export async function updateBookingsCashedOutStatus(
   ids: string[],
   cashedOut: boolean
 ): Promise<boolean> {
+  if (!ids || ids.length === 0) return true;
   const { error } = await supabase
     .from("bookings")
     .update({ cashed_out: cashedOut })

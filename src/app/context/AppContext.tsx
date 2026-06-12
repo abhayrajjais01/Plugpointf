@@ -280,21 +280,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const cancelBooking = async (id: string) => {
     const booking = bookings.find((b) => b.id === id);
-    if (booking && firebaseUser) {
-      const success = await updateWalletBalance(
-        firebaseUser.uid,
-        booking.totalCost,
-        "credit",
-        `Refund for cancelled booking: ${booking.chargerTitle}`,
-        `refund-${id}`
-      );
-      if (success) {
-        setUser((prev) =>
-          prev ? { ...prev, walletBalance: prev.walletBalance + booking.totalCost } : null
-        );
-      }
+    if (!booking) {
+      throw new Error("Booking not found");
     }
+    if (booking.status === "cancelled" || booking.status === "completed") {
+      throw new Error("Booking is already cancelled or completed");
+    }
+    if (!firebaseUser) {
+      throw new Error("User not authenticated");
+    }
+
+    const success = await updateWalletBalance(
+      firebaseUser.uid,
+      booking.totalCost,
+      "credit",
+      `Refund for cancelled booking: ${booking.chargerTitle}`,
+      `refund-${id}`
+    );
+
+    if (!success) {
+      throw new Error("Refund failed");
+    }
+
     await updateBookingStatus(id, "cancelled");
+
+    setUser((prev) =>
+      prev ? { ...prev, walletBalance: prev.walletBalance + booking.totalCost } : null
+    );
     setBookings((prev) =>
       prev.map((b) => (b.id === id ? { ...b, status: "cancelled" as const } : b))
     );

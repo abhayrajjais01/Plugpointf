@@ -178,7 +178,10 @@ BEGIN
   ELSIF NEW.type = 'debit' THEN
     UPDATE public.profiles
     SET wallet_balance = wallet_balance - NEW.amount
-    WHERE id = NEW.user_id;
+    WHERE id = NEW.user_id AND wallet_balance >= NEW.amount;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Insufficient wallet balance for this debit transaction';
+    END IF;
   END IF;
   RETURN NEW;
 END;
