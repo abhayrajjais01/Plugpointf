@@ -330,11 +330,11 @@ export function BookingsPage() {
                     try {
                       await cancelBooking(cancelConfirm);
                       toast.success("Booking cancelled successfully!");
+                      setCancelConfirm(null);
                     } catch (error: any) {
                       toast.error(error.message || "Failed to cancel booking");
                     }
                   }
-                  setCancelConfirm(null);
                 }}
                 className="flex-1 py-2.5 bg-red-500 text-white rounded-xl text-[0.85rem] font-bold shadow-md shadow-red-500/15"
               >
