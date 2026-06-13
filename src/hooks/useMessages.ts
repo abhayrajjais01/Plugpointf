@@ -14,21 +14,8 @@ export function useMessages(conversationId?: string) {
       return;
     }
 
-    const fetchMessagesAndMarkRead = async () => {
+    const markAsRead = async () => {
       try {
-        setLoading(true);
-        // 1. Fetch messages
-        const { data: msgs, error: fetchErr } = await supabase
-          .from("messages")
-          .select("*")
-          .eq("conversation_id", conversationId)
-          .order("created_at", { ascending: true });
-
-        if (!fetchErr && msgs) {
-          setMessages(msgs as Message[]);
-        }
-
-        // 2. Determine role and reset unread count
         const { data: conv } = await supabase
           .from("conversations")
           .select("host_id, customer_id")
@@ -49,13 +36,31 @@ export function useMessages(conversationId?: string) {
           }
         }
       } catch (err) {
-        console.error("Error heavily fetching messages:", err);
+        console.error("Error resetting unread count:", err);
+      }
+    };
+
+    const fetchMessages = async () => {
+      try {
+        setLoading(true);
+        const { data: msgs, error: fetchErr } = await supabase
+          .from("messages")
+          .select("*")
+          .eq("conversation_id", conversationId)
+          .order("created_at", { ascending: true });
+
+        if (!fetchErr && msgs) {
+          setMessages(msgs as Message[]);
+        }
+        await markAsRead();
+      } catch (err) {
+        console.error("Error fetching messages:", err);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchMessagesAndMarkRead();
+    fetchMessages();
 
     const channel = supabase
       .channel(`messages_${conversationId}`)
@@ -68,8 +73,12 @@ export function useMessages(conversationId?: string) {
           filter: `conversation_id=eq.${conversationId}`,
         },
         (payload) => {
-          setMessages((prev) => [...prev, payload.new as Message]);
-          fetchMessagesAndMarkRead(); // Keep unread count 0 while active
+          const newMsg = payload.new as Message;
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === newMsg.id)) return prev;
+            return [...prev, newMsg];
+          });
+          markAsRead(); // Reset count without full refetch
         }
       )
       .subscribe();
