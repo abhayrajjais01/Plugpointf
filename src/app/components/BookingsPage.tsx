@@ -252,19 +252,65 @@ export function BookingsPage() {
                 {/* 2. Active: Show a circular progress indicator */}
                 {booking.status === "active" && (() => {
                   // Compute real progress from booking start/end times
-                  const now = new Date();
+                  let now = new Date();
                   const today = new Date();
-                  const parseTime = (timeStr: string) => {
-                    const [time, period] = timeStr.split(' ');
-                    let [h, m] = time.split(':').map(Number);
-                    if (period?.toUpperCase() === 'PM' && h !== 12) h += 12;
-                    if (period?.toUpperCase() === 'AM' && h === 12) h = 0;
+
+                  // Robust parseTime with validation and support for 12/24 hour formats
+                  const parseTime = (timeStr: string): Date | null => {
+                    // Regex to handle both 12-hour (AM/PM) and 24-hour formats
+                    const match = timeStr.match(/^(\d{1,2}):(\d{2})(?:\s*([AP]M))?$/i);
+                    if (!match) {
+                      console.error(`Invalid time format: ${timeStr}`);
+                      return null;
+                    }
+
+                    let h = parseInt(match[1], 10);
+                    const m = parseInt(match[2], 10);
+                    const period = match[3]?.toUpperCase();
+
+                    // Handle 12-hour format
+                    if (period) {
+                      if (period === 'PM' && h !== 12) h += 12;
+                      if (period === 'AM' && h === 12) h = 0;
+                    }
+
+                    // Validate hours and minutes
+                    if (h < 0 || h > 23 || m < 0 || m > 59) {
+                      console.error(`Invalid time values: ${h}:${m}`);
+                      return null;
+                    }
+
                     const d = new Date(today);
                     d.setHours(h, m, 0, 0);
                     return d;
                   };
+
                   const start = parseTime(booking.startTime);
-                  const end = parseTime(booking.endTime);
+                  let end = parseTime(booking.endTime);
+
+                  // Handle invalid time formats
+                  if (!start || !end) {
+                    return (
+                      <div className="px-3.5 pb-3.5 pt-2">
+                        <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-xl border border-amber-100/50">
+                          <AlertCircle className="w-5 h-5 text-amber-600" />
+                          <p className="text-[0.7rem] text-amber-700 font-medium">Unable to calculate progress (invalid time format)</p>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // Handle bookings that cross midnight
+                  if (end.getTime() <= start.getTime()) {
+                    end.setDate(end.getDate() + 1);
+                  }
+
+                  // Adjust now if needed (if now is before start, add a day)
+                  if (now.getTime() < start.getTime()) {
+                    now = new Date(now);
+                    now.setDate(now.getDate() + 1);
+                  }
+
                   const totalMs = end.getTime() - start.getTime();
                   const elapsedMs = now.getTime() - start.getTime();
                   const progress = totalMs > 0 ? Math.min(100, Math.max(0, Math.round((elapsedMs / totalMs) * 100))) : 0;

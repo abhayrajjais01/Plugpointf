@@ -185,13 +185,21 @@ export function AuthPage() {
                     setError("Please enter your email address first");
                     return;
                   }
+                  // Early return if loading
+                  if (loading) return;
+
+                  setLoading(true);
                   try {
                     setError("");
                     await sendPasswordResetEmail(auth, email.trim());
                     setResetSent(true);
                     setTimeout(() => setResetSent(false), 5000);
                   } catch (err: any) {
-                    setError(err.message || "Failed to send reset email");
+                    // Use generic message to avoid leaking account existence
+                    console.error("Password reset error:", err);
+                    setError("If an account with that email exists, we've sent password reset instructions.");
+                  } finally {
+                    setLoading(false);
                   }
                 }}
                 className="text-[0.75rem] text-primary font-semibold hover:underline disabled:opacity-50"
@@ -200,7 +208,7 @@ export function AuthPage() {
               </button>
               {resetSent && (
                 <p className="text-[0.7rem] text-emerald-600 mt-1 font-medium animate-in fade-in">
-                  ✓ Reset link sent to {email}
+                  ✓ Password reset instructions sent
                 </p>
               )}
             </div>
