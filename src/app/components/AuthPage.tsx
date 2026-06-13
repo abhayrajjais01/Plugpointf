@@ -184,16 +184,21 @@ export function AuthPage() {
                     setError("Please enter your email address first");
                     return;
                   }
+                  setError("");
+                  setLoading(true);
                   try {
                     await sendPasswordResetEmail(auth, email);
                     toast.success("Password reset email sent! Check your inbox.");
                   } catch (err: any) {
                     setError(err.message || "Failed to send reset email.");
+                  } finally {
+                    setLoading(false);
                   }
                 }}
-                className="text-[0.75rem] text-primary font-semibold hover:underline"
+                disabled={loading}
+                className="text-[0.75rem] text-primary font-semibold hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Forgot password?
+                {loading ? "Sending..." : "Forgot password?"}
               </button>
             </div>
           )}
