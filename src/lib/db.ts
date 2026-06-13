@@ -246,7 +246,7 @@ export async function insertBooking(
   if (paymentId) {
     const { data, error } = await supabase
       .from("bookings")
-      .upsert(bookingData, { onConflict: "payment_id", ignoreDuplicates: false })
+      .upsert(bookingData, { onConflict: "payment_id", ignoreDuplicates: true })
       .select()
       .single();
 
@@ -254,6 +254,23 @@ export async function insertBooking(
       console.error("insertBooking (upsert):", error.message);
       return null;
     }
+
+    // Handle case where conflict caused skip (no row returned)
+    if (!data && !error) {
+      const { data: existingRow, error: queryError } = await supabase
+        .from("bookings")
+        .select("*")
+        .eq("payment_id", paymentId)
+        .single();
+
+      if (queryError) {
+        console.error("insertBooking (query existing):", queryError.message);
+        return null;
+      }
+
+      return existingRow ? mapBooking(existingRow) : null;
+    }
+
     return mapBooking(data);
   }
 
