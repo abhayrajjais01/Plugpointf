@@ -150,15 +150,30 @@ CREATE TABLE IF NOT EXISTS public.messages (
 -- ============================================================
 
 -- A. Auto-update Charger Rating on New Review
+-- FIX: Handle DELETE operations where NEW is NULL (only OLD is available)
 CREATE OR REPLACE FUNCTION public.handle_new_review()
 RETURNS TRIGGER AS $$
+DECLARE
+  target_charger_id UUID;
 BEGIN
+  -- On DELETE, NEW is NULL — we must use OLD to get the charger_id
+  IF TG_OP = 'DELETE' THEN
+    target_charger_id := OLD.charger_id;
+  ELSE
+    target_charger_id := NEW.charger_id;
+  END IF;
+
   UPDATE public.chargers
   SET 
-    rating = (SELECT ROUND(AVG(rating)::numeric, 1) FROM public.reviews WHERE charger_id = NEW.charger_id),
-    review_count = (SELECT COUNT(*) FROM public.reviews WHERE charger_id = NEW.charger_id)
-  WHERE id = NEW.charger_id;
-  RETURN NEW;
+    rating = COALESCE((SELECT ROUND(AVG(rating)::numeric, 1) FROM public.reviews WHERE charger_id = target_charger_id), 0),
+    review_count = (SELECT COUNT(*) FROM public.reviews WHERE charger_id = target_charger_id)
+  WHERE id = target_charger_id;
+
+  IF TG_OP = 'DELETE' THEN
+    RETURN OLD;
+  ELSE
+    RETURN NEW;
+  END IF;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -212,8 +227,15 @@ CREATE TRIGGER on_message_added
 -- Row Level Security (Firebase Compatibility Mode)
 -- ============================================================
 
--- Since this app uses Firebase Auth, Supabase sees users as 'anon'.
--- We allow 'anon' to read/write, trusting the application logic for now.
+-- IMPORTANT SECURITY NOTE:
+-- This app uses Firebase Auth (not Supabase Auth), so Supabase sees
+-- ALL requests as the 'anon' role. True per-user RLS enforcement
+-- requires a Supabase JWT bridge (Edge Function that mints a
+-- Supabase JWT from the Firebase JWT).
+--
+-- TODO: Implement Supabase JWT bridge for proper per-user RLS.
+-- Until then, the app relies on client-side authorization checks.
+-- This is NOT secure against direct API access.
 
 -- 1. Profiles: Users can read all, but only edit their own (by ID check)
 DROP POLICY IF EXISTS "profiles_read_all" ON public.profiles;
@@ -241,7 +263,7 @@ CREATE POLICY "chargers_update_own" ON public.chargers FOR UPDATE TO anon, authe
 DROP POLICY IF EXISTS "chargers_delete_own" ON public.chargers;
 CREATE POLICY "chargers_delete_own" ON public.chargers FOR DELETE TO anon, authenticated USING (true);
 
--- 3. Bookings: Read/Write for all (logic handled in app)
+-- 3. Bookings: Read/Write (client-side auth checks enforced)
 DROP POLICY IF EXISTS "bookings_all" ON public.bookings;
 CREATE POLICY "bookings_all" ON public.bookings FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
@@ -249,7 +271,7 @@ CREATE POLICY "bookings_all" ON public.bookings FOR ALL TO anon, authenticated U
 DROP POLICY IF EXISTS "reviews_all" ON public.reviews;
 CREATE POLICY "reviews_all" ON public.reviews FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
--- 5. Wallet: Read/Write for all (security handled via triggers/logic)
+-- 5. Wallet: Read/Write (security handled via triggers + reference_id uniqueness)
 DROP POLICY IF EXISTS "wallet_all" ON public.wallet_transactions;
 CREATE POLICY "wallet_all" ON public.wallet_transactions FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
@@ -263,6 +285,42 @@ CREATE POLICY "conv_all" ON public.conversations FOR ALL TO anon, authenticated 
 
 DROP POLICY IF EXISTS "msg_all" ON public.messages;
 CREATE POLICY "msg_all" ON public.messages FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+-- ============================================================
+-- Constraints for data integrity
+-- ============================================================
+
+-- Prevent duplicate wallet transactions (e.g. double-refund on same booking)
+ALTER TABLE public.wallet_transactions
+  ADD CONSTRAINT unique_wallet_reference_id UNIQUE (reference_id);
+
+-- ============================================================
+-- Indexes for query performance
+-- ============================================================
+
+-- Bookings: fetched by user_id (My Bookings page) and by charger+date (time slot check)
+CREATE INDEX IF NOT EXISTS idx_bookings_user_id ON public.bookings(user_id);
+CREATE INDEX IF NOT EXISTS idx_bookings_charger_date ON public.bookings(charger_id, date);
+
+-- Reviews: filtered by charger_id (Charger Detail page)
+CREATE INDEX IF NOT EXISTS idx_reviews_charger_id ON public.reviews(charger_id);
+
+-- Messages: fetched by conversation_id (Chat thread)
+CREATE INDEX IF NOT EXISTS idx_messages_conversation ON public.messages(conversation_id, created_at);
+
+-- Conversations: looked up by host_id or customer_id (Messages page)
+CREATE INDEX IF NOT EXISTS idx_conversations_host ON public.conversations(host_id);
+CREATE INDEX IF NOT EXISTS idx_conversations_customer ON public.conversations(customer_id);
+
+-- Chargers: filtered by owner_id (Manage Chargers, Host Earnings)
+CREATE INDEX IF NOT EXISTS idx_chargers_owner ON public.chargers(owner_id);
+
+-- User Vehicles: fetched by user_id
+CREATE INDEX IF NOT EXISTS idx_user_vehicles_user ON public.user_vehicles(user_id);
+
+-- Wallet Transactions: fetched by user_id, looked up by reference_id
+CREATE INDEX IF NOT EXISTS idx_wallet_tx_user ON public.wallet_transactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_wallet_tx_reference ON public.wallet_transactions(reference_id);
 
 -- ============================================================
 -- Enable Realtime (Safe Reset)
