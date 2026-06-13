@@ -275,11 +275,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!firebaseUser) return null;
     const saved = await insertBooking(booking, firebaseUser.uid, paymentId);
     if (saved) {
-      // Check if this booking already exists in state (deduplication)
-      const exists = bookings.some(b => b.id === saved.id);
-      if (!exists) {
-        setBookings((prev) => [saved, ...prev]);
-      }
+      setBookings(prev => {
+        if (prev.some(b => b.id === saved.id)) return prev;
+        return [saved, ...prev];
+      });
     }
     return saved;
   };

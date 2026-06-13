@@ -224,46 +224,46 @@ export async function insertBooking(
   userId: string,
   paymentId?: string
 ): Promise<Booking | null> {
-  // If paymentId is provided, check for existing booking with this payment ID
+  const bookingData = {
+    charger_id: booking.chargerId,
+    charger_title: booking.chargerTitle,
+    charger_image: booking.chargerImage,
+    charger_address: booking.chargerAddress,
+    host_name: booking.hostName,
+    user_id: userId,
+    date: booking.date,
+    start_time: booking.startTime,
+    end_time: booking.endTime,
+    duration: booking.duration,
+    total_cost: booking.totalCost,
+    status: booking.status,
+    connector_type: booking.connectorType,
+    power: booking.power,
+    payment_id: paymentId || null,
+  };
+
+  // Use atomic upsert if paymentId is provided
   if (paymentId) {
-    const { data: existing, error: checkError } = await supabase
+    const { data, error } = await supabase
       .from("bookings")
-      .select("*")
-      .eq("payment_id", paymentId)
-      .maybeSingle();
+      .upsert(bookingData, { onConflict: "payment_id", ignoreDuplicates: false })
+      .select()
+      .single();
 
-    if (checkError) {
-      console.error("insertBooking (check existing):", checkError.message);
+    if (error) {
+      console.error("insertBooking (upsert):", error.message);
+      return null;
     }
-
-    // If booking already exists for this payment, return it (deduplicate)
-    if (existing) {
-      console.log("Booking already exists for payment_id:", paymentId);
-      return mapBooking(existing);
-    }
+    return mapBooking(data);
   }
 
+  // Regular insert if no paymentId
   const { data, error } = await supabase
     .from("bookings")
-    .insert({
-      charger_id: booking.chargerId,
-      charger_title: booking.chargerTitle,
-      charger_image: booking.chargerImage,
-      charger_address: booking.chargerAddress,
-      host_name: booking.hostName,
-      user_id: userId,
-      date: booking.date,
-      start_time: booking.startTime,
-      end_time: booking.endTime,
-      duration: booking.duration,
-      total_cost: booking.totalCost,
-      status: booking.status,
-      connector_type: booking.connectorType,
-      power: booking.power,
-      payment_id: paymentId || null,
-    })
+    .insert(bookingData)
     .select()
     .single();
+
   if (error) { console.error("insertBooking:", error.message); return null; }
   return mapBooking(data);
 }
