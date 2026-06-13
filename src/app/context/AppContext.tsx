@@ -55,7 +55,7 @@ interface AppState {
   signup: (name: string, email: string, password: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
-  addBooking: (booking: Omit<Booking, "id">) => Promise<Booking | null>;
+  addBooking: (booking: Omit<Booking, "id">, paymentId?: string) => Promise<Booking | null>;
   cancelBooking: (id: string) => Promise<void>;
   addReview: (review: Pick<Review, "chargerId" | "bookingId" | "userId" | "userName" | "userAvatar" | "rating" | "comment">) => Promise<void>;
   addCharger: (charger: Omit<Charger, "id">) => Promise<Charger | null>;
@@ -271,10 +271,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await firebaseLogout();
   };
 
-  const addBooking = async (booking: Omit<Booking, "id">): Promise<Booking | null> => {
+  const addBooking = async (booking: Omit<Booking, "id">, paymentId?: string): Promise<Booking | null> => {
     if (!firebaseUser) return null;
-    const saved = await insertBooking(booking, firebaseUser.uid);
-    if (saved) setBookings((prev) => [saved, ...prev]);
+    const saved = await insertBooking(booking, firebaseUser.uid, paymentId);
+    if (saved) {
+      // Check if this booking already exists in state (deduplication)
+      const exists = bookings.some(b => b.id === saved.id);
+      if (!exists) {
+        setBookings((prev) => [saved, ...prev]);
+      }
+    }
     return saved;
   };
 

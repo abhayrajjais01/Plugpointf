@@ -163,7 +163,7 @@ export function BookingModal({ charger, onClose }: BookingModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const finalizeBooking = async () => {
+  const finalizeBooking = async (paymentId?: string) => {
     try {
       const saved = await addBooking({
         chargerId: charger.id,
@@ -179,7 +179,7 @@ export function BookingModal({ charger, onClose }: BookingModalProps) {
         status: "upcoming",
         connectorType: charger.connectorType,
         power: charger.power,
-      });
+      }, paymentId);
       if (!saved) throw new Error("Failed to save booking. Please try again.");
       setStep("confirmation");
     } catch (e: unknown) {
@@ -219,8 +219,16 @@ export function BookingModal({ charger, onClose }: BookingModalProps) {
           name: "PlugPoint",
           description: `Booking: ${charger.title}`,
           handler: async function (response: any) {
-            try { await finalizeBooking(); }
-            catch (err) { setError("Booking save failed after payment."); setLoading(false); }
+            try {
+              // Pass payment ID to prevent double-charge on retry
+              await finalizeBooking(response.razorpay_payment_id);
+            }
+            catch (err) {
+              // Payment successful but booking save failed
+              // Do NOT reopen payment - show error and contact support message
+              setError("Payment received but booking creation failed. Please contact support with payment ID: " + response.razorpay_payment_id);
+              setLoading(false);
+            }
           },
           prefill: { name: user.name, email: user.email, contact: user.phone.replace(/\s/g, '') },
           theme: { color: "#10b981" },

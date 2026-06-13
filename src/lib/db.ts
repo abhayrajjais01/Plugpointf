@@ -221,8 +221,28 @@ export async function fetchChargerBookingsByDate(chargerId: string, date: string
 
 export async function insertBooking(
   booking: Omit<Booking, "id">,
-  userId: string
+  userId: string,
+  paymentId?: string
 ): Promise<Booking | null> {
+  // If paymentId is provided, check for existing booking with this payment ID
+  if (paymentId) {
+    const { data: existing, error: checkError } = await supabase
+      .from("bookings")
+      .select("*")
+      .eq("payment_id", paymentId)
+      .maybeSingle();
+
+    if (checkError) {
+      console.error("insertBooking (check existing):", checkError.message);
+    }
+
+    // If booking already exists for this payment, return it (deduplicate)
+    if (existing) {
+      console.log("Booking already exists for payment_id:", paymentId);
+      return mapBooking(existing);
+    }
+  }
+
   const { data, error } = await supabase
     .from("bookings")
     .insert({
@@ -240,6 +260,7 @@ export async function insertBooking(
       status: booking.status,
       connector_type: booking.connectorType,
       power: booking.power,
+      payment_id: paymentId || null,
     })
     .select()
     .single();
