@@ -336,7 +336,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const updateCharger = async (id: string, updates: Partial<Omit<Charger, "id">>): Promise<boolean> => {
-    const updated = await dbUpdateCharger(id, updates);
+    if (!firebaseUser) return false;
+    const updated = await dbUpdateCharger(id, updates, firebaseUser.uid);
     if (updated) {
       setChargers((prev) => prev.map((c) => (c.id === id ? updated : c)));
       return true;
@@ -345,7 +346,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteCharger = async (id: string): Promise<boolean> => {
-    const success = await dbDeleteCharger(id);
+    if (!firebaseUser) return false;
+    const success = await dbDeleteCharger(id, firebaseUser.uid);
     if (success) {
       setChargers((prev) => prev.filter((c) => c.id !== id));
       return true;
