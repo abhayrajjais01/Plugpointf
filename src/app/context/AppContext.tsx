@@ -360,17 +360,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const updateProfile = async (updates: Partial<Pick<User, "name" | "phone" | "avatar">>) => {
     if (!firebaseUser || !user) return false;
-    
+
     try {
-      await upsertProfile({
-        id: firebaseUser.uid,
-        // FIX: Use ?? instead of || so empty strings (falsy) are preserved
+      // Compute merged profile with fallbacks to ensure local state matches DB
+      const mergedProfile = {
+        ...user,
         name: updates.name ?? user.name,
         avatar: updates.avatar ?? user.avatar,
-        email: user.email,
         phone: updates.phone ?? user.phone,
+      };
+
+      await upsertProfile({
+        id: firebaseUser.uid,
+        name: mergedProfile.name,
+        avatar: mergedProfile.avatar,
+        email: mergedProfile.email,
+        phone: mergedProfile.phone,
       });
-      setUser({ ...user, ...updates });
+      setUser(mergedProfile);
       return true;
     } catch (error) {
       console.error("updateProfile error:", error);
