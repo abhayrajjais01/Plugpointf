@@ -248,7 +248,7 @@ export function ChargerDetailPage() {
               <span className="text-[0.7rem] font-semibold text-slate-500">{charger.ownerRating} rating</span>
             </div>
           </div>
-          {(!user || charger.ownerId !== user.id) && (
+          {(!user || charger.ownerId !== user.id) && charger.ownerId !== "ocm-network" && (
             <button onClick={() => setShowChat(true)} className="px-3 py-2 border border-primary text-primary rounded-xl text-[0.75rem] font-bold hover:bg-primary/5 transition-colors flex items-center gap-1.5">
               <MessageCircle className="w-3.5 h-3.5" /> Chat
             </button>
@@ -309,7 +309,7 @@ export function ChargerDetailPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            {(!user || charger.ownerId !== user.id) && (
+            {(!user || charger.ownerId !== user.id) && charger.ownerId !== "ocm-network" && (
               <button
                 onClick={() => setShowChat(true)}
                 className="w-12 h-12 border-2 border-primary/20 rounded-xl flex items-center justify-center text-primary hover:bg-primary/5 transition-colors"
@@ -318,13 +318,24 @@ export function ChargerDetailPage() {
               </button>
             )}
 
-            <button
-              onClick={() => setShowBooking(true)}
-              className="h-12 bg-gradient-to-r from-primary to-emerald-500 text-white rounded-xl font-bold shadow-lg shadow-primary/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 px-6"
-            >
-              <Calendar className="w-4.5 h-4.5" />
-              Reserve Now
-            </button>
+            {/* SECURITY: Prevent self-booking and OCM public charger booking */}
+            {user && charger.ownerId === user.id ? (
+              <div className="h-12 bg-slate-100 text-slate-400 rounded-xl font-bold flex items-center justify-center gap-2 px-6 text-[0.85rem]">
+                Your Station
+              </div>
+            ) : charger.ownerId === "ocm-network" ? (
+              <div className="h-12 bg-slate-100 text-slate-400 rounded-xl font-bold flex items-center justify-center gap-2 px-6 text-[0.85rem]">
+                Public Network
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowBooking(true)}
+                className="h-12 bg-gradient-to-r from-primary to-emerald-500 text-white rounded-xl font-bold shadow-lg shadow-primary/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 px-6"
+              >
+                <Calendar className="w-4.5 h-4.5" />
+                Reserve Now
+              </button>
+            )}
           </div>
         </div>
       </div>

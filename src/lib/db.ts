@@ -164,7 +164,8 @@ export async function insertCharger(charger: Omit<Charger, "id">): Promise<Charg
 }
 
 // This function updates an existing charger (e.g. changing availability)
-export async function updateCharger(id: string, updates: Partial<Omit<Charger, "id">>): Promise<Charger | null> {
+// SECURITY: owner_id filter ensures only the charger owner can modify it
+export async function updateCharger(id: string, updates: Partial<Omit<Charger, "id">>, ownerId: string): Promise<Charger | null> {
   const dbUpdates: any = {};
   
   if (updates.available !== undefined) dbUpdates.available = updates.available;
@@ -178,6 +179,7 @@ export async function updateCharger(id: string, updates: Partial<Omit<Charger, "
     .from("chargers")
     .update(dbUpdates)
     .eq("id", id)
+    .eq("owner_id", ownerId)
     .select()
     .single();
 
@@ -186,11 +188,13 @@ export async function updateCharger(id: string, updates: Partial<Omit<Charger, "
 }
 
 // This function permanently deletes a charger
-export async function deleteCharger(id: string): Promise<boolean> {
+// SECURITY: owner_id filter ensures only the charger owner can delete it
+export async function deleteCharger(id: string, ownerId: string): Promise<boolean> {
   const { error } = await supabase
     .from("chargers")
     .delete()
-    .eq("id", id);
+    .eq("id", id)
+    .eq("owner_id", ownerId);
 
   if (error) { console.error("deleteCharger:", error.message); return false; }
   return true;
