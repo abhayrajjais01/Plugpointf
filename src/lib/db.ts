@@ -246,7 +246,7 @@ export async function insertBooking(
   if (paymentId) {
     const { data, error } = await supabase
       .from("bookings")
-      .upsert(bookingData, { onConflict: "payment_id", ignoreDuplicates: false })
+      .upsert(bookingData, { onConflict: "payment_id", ignoreDuplicates: true })
       .select()
       .single();
 
@@ -254,6 +254,24 @@ export async function insertBooking(
       console.error("insertBooking (upsert):", error.message);
       return null;
     }
+
+    // If data is null and no error, the conflict was ignored (DO NOTHING)
+    // Query for the existing booking by payment_id
+    if (!data && !error) {
+      const { data: existingBooking, error: fetchError } = await supabase
+        .from("bookings")
+        .select("*")
+        .eq("payment_id", paymentId)
+        .single();
+
+      if (fetchError) {
+        console.error("insertBooking (fetch existing):", fetchError.message);
+        return null;
+      }
+
+      return existingBooking ? mapBooking(existingBooking) : null;
+    }
+
     return mapBooking(data);
   }
 

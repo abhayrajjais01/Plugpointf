@@ -83,6 +83,9 @@ CREATE TABLE IF NOT EXISTS public.bookings (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Ensure payment_id column exists for backward compatibility with existing deployments
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS payment_id TEXT;
+
 -- Create unique index for payment_id (allowing NULL values)
 CREATE UNIQUE INDEX IF NOT EXISTS bookings_payment_id_unique
 ON public.bookings(payment_id)
