@@ -250,7 +250,30 @@ export function BookingsPage() {
                 )}
 
                 {/* 2. Active: Show a circular progress indicator */}
-                {booking.status === "active" && (
+                {booking.status === "active" && (() => {
+                  // Compute real progress from booking start/end times
+                  const now = new Date();
+                  const today = new Date();
+                  const parseTime = (timeStr: string) => {
+                    const [time, period] = timeStr.split(' ');
+                    let [h, m] = time.split(':').map(Number);
+                    if (period?.toUpperCase() === 'PM' && h !== 12) h += 12;
+                    if (period?.toUpperCase() === 'AM' && h === 12) h = 0;
+                    const d = new Date(today);
+                    d.setHours(h, m, 0, 0);
+                    return d;
+                  };
+                  const start = parseTime(booking.startTime);
+                  const end = parseTime(booking.endTime);
+                  const totalMs = end.getTime() - start.getTime();
+                  const elapsedMs = now.getTime() - start.getTime();
+                  const progress = totalMs > 0 ? Math.min(100, Math.max(0, Math.round((elapsedMs / totalMs) * 100))) : 0;
+                  const remainingMs = Math.max(0, end.getTime() - now.getTime());
+                  const remainingMin = Math.ceil(remainingMs / 60000);
+                  const remainingText = remainingMin >= 60
+                    ? `${Math.floor(remainingMin / 60)}h ${remainingMin % 60}m remaining`
+                    : `${remainingMin} min remaining`;
+                  return (
                   <div className="px-3.5 pb-3.5 pt-2">
                     <div className="flex items-center gap-3 p-3 bg-emerald-50 rounded-xl border border-emerald-100/50">
                       {/* Circular Progress Ring */}
@@ -258,21 +281,22 @@ export function BookingsPage() {
                         <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
                           <circle cx="18" cy="18" r="14" fill="none" stroke="#d1fae5" strokeWidth="3" />
                           <circle cx="18" cy="18" r="14" fill="none" stroke="#10b981" strokeWidth="3"
-                            strokeDasharray="88" strokeDashoffset={88 - (88 * 72 / 100)}
+                            strokeDasharray="88" strokeDashoffset={88 - (88 * progress / 100)}
                             strokeLinecap="round" className="transition-all duration-1000"
                           />
                         </svg>
                         <div className="absolute inset-0 flex items-center justify-center">
-                          <span className="text-[0.6rem] font-black text-emerald-700">72%</span>
+                          <span className="text-[0.6rem] font-black text-emerald-700">{progress}%</span>
                         </div>
                       </div>
                       <div className="flex-1">
                         <p className="text-[0.7rem] text-emerald-700 font-bold uppercase tracking-wider">Charging Live</p>
-                        <p className="text-[0.65rem] text-emerald-600/60 mt-0.5 font-medium">Estimated 45 min remaining</p>
+                        <p className="text-[0.65rem] text-emerald-600/60 mt-0.5 font-medium">{remainingText}</p>
                       </div>
                     </div>
                   </div>
-                )}
+                  );
+                })()}
 
                 {/* 3. Completed: Show Leave Review */}
                 {booking.status === "completed" && (

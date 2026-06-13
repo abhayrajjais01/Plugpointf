@@ -434,12 +434,16 @@ export function HomePage() {
           INLINE STATS ROW
           ═══════════════════════════════════════════ */}
       <div className="flex gap-3 px-4 mt-4 overflow-x-auto no-scrollbar">
-        {[
-          { icon: Bolt, label: "Chargers", value: chargers.length.toString(), iconBg: "bg-emerald-500/10", iconColor: "text-emerald-600" },
-          { icon: MapPin, label: "City", value: "Bangalore", iconBg: "bg-blue-500/10", iconColor: "text-blue-600" },
-          { icon: IndianRupee, label: "From", value: "₹80/hr", iconBg: "bg-amber-500/10", iconColor: "text-amber-600" },
-          { icon: Star, label: "Avg", value: "4.7★", iconBg: "bg-purple-500/10", iconColor: "text-purple-600" },
-        ].map((stat) => (
+        {(() => {
+          const minPrice = chargers.length > 0 ? Math.min(...chargers.map(c => c.pricePerHour)) : 0;
+          const avgRating = chargers.length > 0 ? (chargers.reduce((s, c) => s + c.rating, 0) / chargers.length).toFixed(1) : "0";
+          return [
+            { icon: Bolt, label: "Chargers", value: chargers.length.toString(), iconBg: "bg-emerald-500/10", iconColor: "text-emerald-600" },
+            { icon: MapPin, label: "City", value: "Bangalore", iconBg: "bg-blue-500/10", iconColor: "text-blue-600" },
+            { icon: IndianRupee, label: "From", value: `₹${minPrice}/hr`, iconBg: "bg-amber-500/10", iconColor: "text-amber-600" },
+            { icon: Star, label: "Avg", value: `${avgRating}★`, iconBg: "bg-purple-500/10", iconColor: "text-purple-600" },
+          ];
+        })().map((stat) => (
           <div key={stat.label}
             className="flex items-center gap-2.5 px-3 py-2.5 bg-white rounded-xl border border-slate-100/80 flex-shrink-0 shadow-sm"
           >
