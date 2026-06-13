@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, User, Phone, Loader2, CheckCircle } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { toast } from "sonner";
@@ -14,6 +14,13 @@ export function ProfileEditModal({ isOpen, onClose }: ProfileEditModalProps) {
   const [phone, setPhone] = useState(user?.phone || "");
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+
+  useEffect(() => {
+    if (isOpen && user) {
+      setName(user.name || "");
+      setPhone(user.phone || "");
+    }
+  }, [isOpen, user]);
 
   if (!isOpen || !user) return null;
 

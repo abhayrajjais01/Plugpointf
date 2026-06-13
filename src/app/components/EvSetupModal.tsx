@@ -318,8 +318,7 @@ export function EvSetupModal({ isOpen, onClose }: EvSetupModalProps) {
         <button
           onClick={() => setShowRegistrationPrompt(true)}
           disabled={!selectedModel}
-          className="w-full bg-primary/40 text-white font-bold py-3.5 rounded-xl transition-colors disabled:opacity-50"
-          style={{ backgroundColor: !selectedModel ? "rgba(255, 114, 94, 0.5)" : "#ff725e" }}
+          className="w-full bg-primary text-white font-bold py-3.5 rounded-xl transition-all disabled:opacity-40"
         >
           Proceed
         </button>

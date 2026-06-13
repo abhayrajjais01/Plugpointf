@@ -23,6 +23,7 @@ export async function geocodeAddress(address: string, city: string): Promise<Coo
   const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
     headers: {
       "Accept-Language": "en",
+      "User-Agent": "PlugPoint-EV-App/1.0.0 (contact@plugpoint.com)",
     },
   });
 

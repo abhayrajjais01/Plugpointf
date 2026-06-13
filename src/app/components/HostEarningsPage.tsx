@@ -15,8 +15,8 @@ import {
   CalendarDays,
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
-import { fetchHostBookings } from "../../lib/db";
-import type { Booking } from "../../types";
+import { fetchHostBookings, updateBookingsCashedOutStatus } from "../../lib/db";
+import type { Booking } from "../data/mock-data";
 import { toast } from "sonner";
 
 /**
@@ -48,7 +48,8 @@ export function HostEarningsPage() {
   }, [user]);
 
   // --- EARNINGS MATH ---
-  const completedBookings = hostBookings.filter((b) => b.status === "completed");
+  const completedBookings = hostBookings.filter((b) => b.status === "completed" && !b.cashedOut);
+  const rollbackFailedBookings = hostBookings.filter((b) => b.rollbackFailed);
   const upcomingBookings = hostBookings.filter((b) => b.status === "upcoming");
   const cancelledBookings = hostBookings.filter((b) => b.status === "cancelled");
 
@@ -67,14 +68,62 @@ export function HostEarningsPage() {
       return;
     }
     setCashingOut(true);
-    // Simulate a brief server delay
-    await new Promise((r) => setTimeout(r, 1500));
+    
+    const bookingIdsToCashout = completedBookings.map((b) => b.id);
+    const dbSuccess = await updateBookingsCashedOutStatus(bookingIdsToCashout, true);
+    
+    if (!dbSuccess) {
+      toast.error("Failed to process cashout. Please try again.");
+      setCashingOut(false);
+      return;
+    }
+
     // Credit to wallet
     const success = await topUpWallet(netEarnings, `host-cashout-${Date.now()}`);
     if (success) {
       toast.success(`₹${netEarnings} has been added to your PlugPoint Wallet!`);
+      setHostBookings((prev) =>
+        prev.map((b) =>
+          bookingIdsToCashout.includes(b.id) ? { ...b, cashedOut: true } : b
+        )
+      );
     } else {
-      toast.error("Cashout failed. Please try again.");
+      // Rollback database update if wallet credit failed
+      try {
+        const rollbackSuccess = await updateBookingsCashedOutStatus(bookingIdsToCashout, false);
+        if (rollbackSuccess) {
+          toast.error("Cashout failed. Please try again.");
+          // Refresh state from DB to confirm consistency
+          if (user) {
+            const fresh = await fetchHostBookings(user.id);
+            setHostBookings(fresh);
+          }
+        } else {
+          console.error("Rollback failed for booking IDs:", bookingIdsToCashout);
+          toast.error(`Cashout failed and rollback also failed — please contact support with booking IDs: ${bookingIdsToCashout.join(", ")}`, {
+            duration: 10000,
+          });
+          setHostBookings((prev) =>
+            prev.map((b) =>
+              bookingIdsToCashout.includes(b.id)
+                ? { ...b, cashedOut: false, rollbackFailed: true }
+                : b
+            )
+          );
+        }
+      } catch (err) {
+        console.error("Error during rollback for booking IDs:", bookingIdsToCashout, err);
+        toast.error(`Cashout failed and rollback also failed — please contact support with booking IDs: ${bookingIdsToCashout.join(", ")}`, {
+          duration: 10000,
+        });
+        setHostBookings((prev) =>
+          prev.map((b) =>
+            bookingIdsToCashout.includes(b.id)
+              ? { ...b, cashedOut: false, rollbackFailed: true }
+              : b
+          )
+        );
+      }
     }
     setCashingOut(false);
   };
@@ -145,6 +194,23 @@ export function HostEarningsPage() {
           )}
         </div>
       </div>
+      {rollbackFailedBookings.length > 0 && (
+        <div className="mx-4 mt-4 mb-2">
+          <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-[0.85rem] font-bold text-red-900">Cashout Rollback Failed</p>
+              <p className="text-[0.7rem] text-red-700/80 mt-0.5">
+                A cashout attempt failed to transfer to your wallet and database rollback also failed.
+                Please contact support with the following Booking IDs:
+              </p>
+              <p className="text-[0.7rem] font-mono text-red-800 mt-1 select-all break-all bg-red-100/50 p-1.5 rounded">
+                {rollbackFailedBookings.map((b) => b.id).join(", ")}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ─── CASHOUT CARD ─── */}
       <div className="mx-4 -mt-3 relative z-10">

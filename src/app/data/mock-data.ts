@@ -5,6 +5,66 @@
  */
 export type { User, Charger, Booking, Review } from "../../types";
 
+/**
+ * This blueprint defines a "Charger" (could be a private home charger or a public station).
+ */
+export interface Charger {
+  id: string;
+  ownerId: string;
+  ownerName: string;
+  ownerAvatar: string;
+  ownerRating: number;
+  title: string;       // The name of the station (e.g., "Koramangala Fast Charge")
+  description: string; // A short paragraph about the charger
+  image: string;       // A photo of the charging spot
+  address: string;
+  city: string;
+  lat: number;         // GPS Latitude (North/South)
+  lng: number;         // GPS Longitude (East/West)
+  connectorType: string; // The plug type (e.g., CCS, Tesla, J1772)
+  power: number;       // How fast it charges (in kilo-Watts)
+  pricePerHour: number;
+  pricePerKwh: number;
+  available: boolean;
+  availableHours: string;
+  rating: number;
+  reviewCount: number;
+  amenities: string[];  // Extra features like "Cafe", "WiFi", or "CCTV"
+  instructions: string; // Details on how to enter the parking or start the charger
+  verified: boolean;
+}
+
+export interface Booking {
+  id: string;
+  chargerId: string;
+  chargerTitle: string;
+  chargerImage: string;
+  chargerAddress: string;
+  hostName: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  duration: number; // hours
+  totalCost: number;
+  status: "upcoming" | "active" | "completed" | "cancelled";
+  connectorType: string;
+  power: number;
+  cashedOut?: boolean;
+  rollbackFailed?: boolean;
+}
+
+export interface Review {
+  id: string;
+  chargerId: string;
+  bookingId: string | null;
+  userId: string;
+  userName: string;
+  userAvatar: string;
+  rating: number;
+  comment: string;
+  date: string;
+  helpful: number;
+}
 
 export const currentUser: User = {
   id: "u1",
