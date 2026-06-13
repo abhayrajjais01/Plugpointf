@@ -120,6 +120,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     destination: string;
     isLoading: boolean;
     routeData: any | null;
+    distance: number | null;
+    duration: number | null;
     error: string | null;
   }>({
     origin: "",
@@ -243,7 +245,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         // Fetch other user-specific data
         fetchBookings(firebaseUser.uid).then(setBookings);
-        fetchUserVehicles(firebaseUser.uid).then(setMyVehicles);
+        // Note: vehicles are fetched in the [user] effect to avoid duplicate calls
       } else {
         setUser(null);
         setBookings([]);
@@ -319,12 +321,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!saved) return;
     setReviews((prev) => [saved, ...prev]);
     // Refresh charger rating locally
+    // FIX: use setReviews-updated state via functional updater to avoid stale closure
     setChargers((prev) =>
       prev.map((c) => {
         if (c.id !== review.chargerId) return c;
-        const all = [...reviews.filter((r) => r.chargerId === c.id), saved];
-        const avg = all.reduce((s, r) => s + r.rating, 0) / all.length;
-        return { ...c, rating: Math.round(avg * 10) / 10, reviewCount: c.reviewCount + 1 };
+        // The DB trigger already computes the correct value; just increment count
+        // and optimistically set the rating (will be corrected on next fetch)
+        const newCount = c.reviewCount + 1;
+        const newRating = ((c.rating * c.reviewCount) + saved.rating) / newCount;
+        return { ...c, rating: Math.round(newRating * 10) / 10, reviewCount: newCount };
       })
     );
   };
@@ -359,10 +364,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       await upsertProfile({
         id: firebaseUser.uid,
-        name: updates.name || user.name,
-        avatar: updates.avatar || user.avatar,
+        // FIX: Use ?? instead of || so empty strings (falsy) are preserved
+        name: updates.name ?? user.name,
+        avatar: updates.avatar ?? user.avatar,
         email: user.email,
-        phone: updates.phone || user.phone,
+        phone: updates.phone ?? user.phone,
       });
       setUser({ ...user, ...updates });
       return true;

@@ -4,7 +4,7 @@
 import { supabase } from "../config/supabase";
 import type { Charger, Booking, Review } from "../app/data/mock-data";
 import type { UserVehicle } from "../app/data/ev-data";
-import { format } from "date-fns";
+import { format, parse } from "date-fns";
 
 /**
  * --- WHAT ARE MAPPERS? ---
@@ -48,16 +48,21 @@ function mapBooking(row: any): Booking {
   // Only auto-update logical time statuses (ignore manually cancelled ones)
   if (computedStatus !== "cancelled") {
     const now = new Date();
-    // Assuming row.date is "Apr 19, 2026" and row.end_time is "6:00 PM"
-    const startDateTime = new Date(`${row.date} ${row.start_time}`);
-    const endDateTime = new Date(`${row.date} ${row.end_time}`);
+    // FIX: Use date-fns parse() instead of native new Date(string) which
+    // is unreliable across browsers (fails on Safari/Firefox for this format)
+    const dateTimeFormat = 'MMM d, yyyy h:mm a';
+    const startDateTime = parse(`${row.date} ${row.start_time}`, dateTimeFormat, new Date());
+    const endDateTime = parse(`${row.date} ${row.end_time}`, dateTimeFormat, new Date());
 
-    if (now > endDateTime) {
-      computedStatus = "completed";
-    } else if (now >= startDateTime && now <= endDateTime) {
-      computedStatus = "active";
-    } else {
-      computedStatus = "upcoming";
+    // Guard against invalid dates (parse returns Invalid Date if format doesn't match)
+    if (!isNaN(startDateTime.getTime()) && !isNaN(endDateTime.getTime())) {
+      if (now > endDateTime) {
+        computedStatus = "completed";
+      } else if (now >= startDateTime && now <= endDateTime) {
+        computedStatus = "active";
+      } else {
+        computedStatus = "upcoming";
+      }
     }
   }
 
@@ -339,10 +344,13 @@ export async function fetchProfile(id: string) {
 
 // "Upsert" is a mix of Update + Insert.
 // If the user already exists, update their info. If they are new, create them!
+// FIX: joined_date is only set on INSERT, never overwritten on UPDATE.
 export async function upsertProfile(p: {
   id: string; name: string; avatar: string; email: string; phone: string;
 }) {
-  const { error } = await supabase.from("profiles").upsert(
+  // Step 1: Try inserting as a new user (with joined_date).
+  // If they already exist, this is a no-op thanks to ignoreDuplicates.
+  const { error: insertError } = await supabase.from("profiles").upsert(
     {
       id: p.id,
       name: p.name,
@@ -351,10 +359,20 @@ export async function upsertProfile(p: {
       phone: p.phone,
       joined_date: format(new Date(), "MMMM yyyy"), // e.g. "October 2025"
     },
-    // If the 'id' matches an existing user, just overwrite that row
-    { onConflict: "id" }
+    // ignoreDuplicates: true means if the id already exists, skip (don't update)
+    { onConflict: "id", ignoreDuplicates: true }
   );
-  if (error) console.error("upsertProfile:", error.message);
+
+  // Step 2: Always update the non-date fields for existing users
+  const { error: updateError } = await supabase.from("profiles").update({
+    name: p.name,
+    avatar_url: p.avatar,
+    email: p.email,
+    phone: p.phone,
+  }).eq("id", p.id);
+
+  if (insertError) console.error("upsertProfile insert:", insertError.message);
+  if (updateError) console.error("upsertProfile update:", updateError.message);
 }
 
 // ─── WALLET ───────────────────────────────────────────────────
