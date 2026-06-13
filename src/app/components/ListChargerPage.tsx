@@ -92,7 +92,10 @@ export function ListChargerPage() {
 
     try {
       // Validate pricePerKwh is non-negative
-      const parsedPricePerKwh = parseFloat(pricePerKwh) || 12;
+      const parsedPricePerKwh = parseFloat(pricePerKwh);
+      if (Number.isNaN(parsedPricePerKwh)) {
+        throw new Error("Price per kWh must be a valid number");
+      }
       if (parsedPricePerKwh < 0) {
         throw new Error("Price per kWh cannot be negative");
       }
