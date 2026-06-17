@@ -26,13 +26,17 @@ export function ensureRazorpayLoaded(): Promise<void> {
     }
 
     // If it exists but isn't loaded yet, attach event listeners
+    let interval: any = null;
+
     const handleLoad = () => {
+      if (interval) clearInterval(interval);
       resolve();
       script.removeEventListener("load", handleLoad);
       script.removeEventListener("error", handleError);
     };
 
     const handleError = () => {
+      if (interval) clearInterval(interval);
       reject(new Error("Failed to load Razorpay SDK"));
       script.removeEventListener("load", handleLoad);
       script.removeEventListener("error", handleError);
@@ -43,7 +47,7 @@ export function ensureRazorpayLoaded(): Promise<void> {
 
     // Fallback: in case onload already fired but window.Razorpay wasn't checked yet
     let attempts = 0;
-    const interval = setInterval(() => {
+    interval = setInterval(() => {
       if ((window as any).Razorpay) {
         clearInterval(interval);
         resolve();
