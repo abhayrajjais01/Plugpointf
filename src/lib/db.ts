@@ -230,28 +230,66 @@ export async function fetchChargerBookingsByDate(chargerId: string, date: string
 
 export async function insertBooking(
   booking: Omit<Booking, "id">,
-  userId: string
+  userId: string,
+  paymentId?: string
 ): Promise<Booking | null> {
+  const bookingData = {
+    charger_id: booking.chargerId,
+    charger_title: booking.chargerTitle,
+    charger_image: booking.chargerImage,
+    charger_address: booking.chargerAddress,
+    host_name: booking.hostName,
+    user_id: userId,
+    date: booking.date,
+    start_time: booking.startTime,
+    end_time: booking.endTime,
+    duration: booking.duration,
+    total_cost: booking.totalCost,
+    status: booking.status,
+    connector_type: booking.connectorType,
+    power: booking.power,
+    payment_id: paymentId || null,
+  };
+
+  // Use atomic upsert if paymentId is provided
+  if (paymentId) {
+    const { data, error } = await supabase
+      .from("bookings")
+      .upsert(bookingData, { onConflict: "payment_id", ignoreDuplicates: true })
+      .select()
+      .single();
+
+    if (error) {
+      console.error("insertBooking (upsert):", error.message);
+      return null;
+    }
+
+    // Handle case where conflict caused skip (no row returned)
+    if (!data && !error) {
+      const { data: existingRow, error: queryError } = await supabase
+        .from("bookings")
+        .select("*")
+        .eq("payment_id", paymentId)
+        .single();
+
+      if (queryError) {
+        console.error("insertBooking (query existing):", queryError.message);
+        return null;
+      }
+
+      return existingRow ? mapBooking(existingRow) : null;
+    }
+
+    return mapBooking(data);
+  }
+
+  // Regular insert if no paymentId
   const { data, error } = await supabase
     .from("bookings")
-    .insert({
-      charger_id: booking.chargerId,
-      charger_title: booking.chargerTitle,
-      charger_image: booking.chargerImage,
-      charger_address: booking.chargerAddress,
-      host_name: booking.hostName,
-      user_id: userId,
-      date: booking.date,
-      start_time: booking.startTime,
-      end_time: booking.endTime,
-      duration: booking.duration,
-      total_cost: booking.totalCost,
-      status: booking.status,
-      connector_type: booking.connectorType,
-      power: booking.power,
-    })
+    .insert(bookingData)
     .select()
     .single();
+
   if (error) { console.error("insertBooking:", error.message); return null; }
   return mapBooking(data);
 }

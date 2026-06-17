@@ -250,7 +250,76 @@ export function BookingsPage() {
                 )}
 
                 {/* 2. Active: Show a circular progress indicator */}
-                {booking.status === "active" && (
+                {booking.status === "active" && (() => {
+                  // Compute real progress from booking start/end times
+                  let now = new Date();
+                  const today = new Date();
+
+                  // Robust parseTime with validation and support for 12/24 hour formats
+                  const parseTime = (timeStr: string): Date | null => {
+                    // Regex to handle both 12-hour (AM/PM) and 24-hour formats
+                    const match = timeStr.match(/^(\d{1,2}):(\d{2})(?:\s*([AP]M))?$/i);
+                    if (!match) {
+                      console.error(`Invalid time format: ${timeStr}`);
+                      return null;
+                    }
+
+                    let h = parseInt(match[1], 10);
+                    const m = parseInt(match[2], 10);
+                    const period = match[3]?.toUpperCase();
+
+                    // Handle 12-hour format
+                    if (period) {
+                      if (period === 'PM' && h !== 12) h += 12;
+                      if (period === 'AM' && h === 12) h = 0;
+                    }
+
+                    // Validate hours and minutes
+                    if (h < 0 || h > 23 || m < 0 || m > 59) {
+                      console.error(`Invalid time values: ${h}:${m}`);
+                      return null;
+                    }
+
+                    const d = new Date(today);
+                    d.setHours(h, m, 0, 0);
+                    return d;
+                  };
+
+                  const start = parseTime(booking.startTime);
+                  let end = parseTime(booking.endTime);
+
+                  // Handle invalid time formats
+                  if (!start || !end) {
+                    return (
+                      <div className="px-3.5 pb-3.5 pt-2">
+                        <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-xl border border-amber-100/50">
+                          <AlertCircle className="w-5 h-5 text-amber-600" />
+                          <p className="text-[0.7rem] text-amber-700 font-medium">Unable to calculate progress (invalid time format)</p>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // Handle bookings that cross midnight
+                  if (end.getTime() <= start.getTime()) {
+                    end.setDate(end.getDate() + 1);
+                  }
+
+                  // Adjust now if needed (if now is before start, add a day)
+                  if (now.getTime() < start.getTime()) {
+                    now = new Date(now);
+                    now.setDate(now.getDate() + 1);
+                  }
+
+                  const totalMs = end.getTime() - start.getTime();
+                  const elapsedMs = now.getTime() - start.getTime();
+                  const progress = totalMs > 0 ? Math.min(100, Math.max(0, Math.round((elapsedMs / totalMs) * 100))) : 0;
+                  const remainingMs = Math.max(0, end.getTime() - now.getTime());
+                  const remainingMin = Math.ceil(remainingMs / 60000);
+                  const remainingText = remainingMin >= 60
+                    ? `${Math.floor(remainingMin / 60)}h ${remainingMin % 60}m remaining`
+                    : `${remainingMin} min remaining`;
+                  return (
                   <div className="px-3.5 pb-3.5 pt-2">
                     <div className="flex items-center gap-3 p-3 bg-emerald-50 rounded-xl border border-emerald-100/50">
                       {/* Circular Progress Ring */}
@@ -258,21 +327,22 @@ export function BookingsPage() {
                         <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
                           <circle cx="18" cy="18" r="14" fill="none" stroke="#d1fae5" strokeWidth="3" />
                           <circle cx="18" cy="18" r="14" fill="none" stroke="#10b981" strokeWidth="3"
-                            strokeDasharray="88" strokeDashoffset={88 - (88 * 72 / 100)}
+                            strokeDasharray="88" strokeDashoffset={88 - (88 * progress / 100)}
                             strokeLinecap="round" className="transition-all duration-1000"
                           />
                         </svg>
                         <div className="absolute inset-0 flex items-center justify-center">
-                          <span className="text-[0.6rem] font-black text-emerald-700">72%</span>
+                          <span className="text-[0.6rem] font-black text-emerald-700">{progress}%</span>
                         </div>
                       </div>
                       <div className="flex-1">
                         <p className="text-[0.7rem] text-emerald-700 font-bold uppercase tracking-wider">Charging Live</p>
-                        <p className="text-[0.65rem] text-emerald-600/60 mt-0.5 font-medium">Estimated 45 min remaining</p>
+                        <p className="text-[0.65rem] text-emerald-600/60 mt-0.5 font-medium">{remainingText}</p>
                       </div>
                     </div>
                   </div>
-                )}
+                  );
+                })()}
 
                 {/* 3. Completed: Show Leave Review */}
                 {booking.status === "completed" && (
