@@ -307,7 +307,9 @@ export function BookingsPage() {
                   }
 
                   // Adjust now if needed (only if booking crosses midnight and now has transitioned past midnight)
-                  if (crossesMidnight && now.getTime() < start.getTime()) {
+                  // We check if the difference is > 12 hours to distinguish it from the same-day pre-start period.
+                  const twelveHoursMs = 12 * 60 * 60 * 1000;
+                  if (crossesMidnight && (start.getTime() - now.getTime() > twelveHoursMs)) {
                     now = new Date(now);
                     now.setDate(now.getDate() + 1);
                   }

@@ -225,6 +225,25 @@ export function BookingModal({ charger, onClose }: BookingModalProps) {
               await finalizeBooking(response.razorpay_payment_id);
             }
             catch (err) {
+              // Store failed booking info in localStorage for recovery
+              try {
+                const failedBookings = JSON.parse(localStorage.getItem("failed_bookings") || "[]");
+                failedBookings.push({
+                  paymentId: response.razorpay_payment_id,
+                  chargerId: charger.id,
+                  chargerTitle: charger.title,
+                  userId: user?.id,
+                  date: selectedDate.full,
+                  startTime,
+                  endTime: finalEndTime,
+                  totalCost: total,
+                  timestamp: new Date().toISOString()
+                });
+                localStorage.setItem("failed_bookings", JSON.stringify(failedBookings));
+              } catch (storageErr) {
+                console.error("Failed to save failed booking to localStorage", storageErr);
+              }
+
               // Payment successful but booking save failed
               // Do NOT reopen payment - show error and contact support message
               setError("Payment received but booking creation failed. Please contact support with payment ID: " + response.razorpay_payment_id);
