@@ -184,6 +184,7 @@ export function BookingModal({ charger, onClose }: BookingModalProps) {
       setStep("confirmation");
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
+      throw e;
     } finally {
       setLoading(false);
     }
