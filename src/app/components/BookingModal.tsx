@@ -9,8 +9,7 @@ import {
 import { useApp } from "../context/AppContext";
 import type { Charger } from "../data/mock-data";
 import { fetchChargerBookingsByDate } from "../../lib/db";
-
-declare var Razorpay: any;
+import { ensureRazorpayLoaded } from "../../lib/utils";
 
 interface BookingModalProps {
   charger: Charger;
@@ -164,7 +163,7 @@ export function BookingModal({ charger, onClose }: BookingModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const finalizeBooking = async () => {
+  const finalizeBooking = async (paymentId?: string) => {
     try {
       const saved = await addBooking({
         chargerId: charger.id,
@@ -180,11 +179,12 @@ export function BookingModal({ charger, onClose }: BookingModalProps) {
         status: "upcoming",
         connectorType: charger.connectorType,
         power: charger.power,
-      });
+      }, paymentId);
       if (!saved) throw new Error("Failed to save booking. Please try again.");
       setStep("confirmation");
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
+      throw e;
     } finally {
       setLoading(false);
     }
@@ -207,6 +207,9 @@ export function BookingModal({ charger, onClose }: BookingModalProps) {
         if (!success) throw new Error("Wallet deduction failed.");
         await finalizeBooking();
       } else {
+        // Ensure Razorpay SDK is loaded before proceeding
+        await ensureRazorpayLoaded();
+
         const razorpayKeyId = import.meta.env.VITE_RAZORPAY_KEY_ID;
         if (!razorpayKeyId) throw new Error("Razorpay is not configured.");
 
@@ -217,15 +220,42 @@ export function BookingModal({ charger, onClose }: BookingModalProps) {
           name: "PlugPoint",
           description: `Booking: ${charger.title}`,
           handler: async function (response: any) {
-            try { await finalizeBooking(); } 
-            catch (err) { setError("Booking save failed after payment."); setLoading(false); }
+            try {
+              // Pass payment ID to prevent double-charge on retry
+              await finalizeBooking(response.razorpay_payment_id);
+            }
+            catch (err) {
+              // Store failed booking info in localStorage for recovery
+              try {
+                const failedBookings = JSON.parse(localStorage.getItem("failed_bookings") || "[]");
+                failedBookings.push({
+                  paymentId: response.razorpay_payment_id,
+                  chargerId: charger.id,
+                  chargerTitle: charger.title,
+                  userId: user?.id,
+                  date: selectedDate.full,
+                  startTime,
+                  endTime: finalEndTime,
+                  totalCost: total,
+                  timestamp: new Date().toISOString()
+                });
+                localStorage.setItem("failed_bookings", JSON.stringify(failedBookings));
+              } catch (storageErr) {
+                console.error("Failed to save failed booking to localStorage", storageErr);
+              }
+
+              // Payment successful but booking save failed
+              // Do NOT reopen payment - show error and contact support message
+              setError("Payment received but booking creation failed. Please contact support with payment ID: " + response.razorpay_payment_id);
+              setLoading(false);
+            }
           },
           prefill: { name: user.name, email: user.email, contact: user.phone.replace(/\s/g, '') },
           theme: { color: "#10b981" },
           modal: { ondismiss: function() { setLoading(false); } }
         };
 
-        const rzp = new Razorpay(options);
+        const rzp = new window.Razorpay(options);
         rzp.on('payment.failed', function (response: any){
           setError(`Payment failed: ${response.error.description}`);
           setLoading(false);

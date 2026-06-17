@@ -1,7 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router";
 import { Zap, Mail, Lock, User, Eye, EyeOff, ArrowLeft } from "lucide-react";
 import { useApp } from "../context/AppContext";
+import { sendPasswordResetEmail } from "firebase/auth";
+import { auth } from "../../config/firebase";
 
 /**
  * --- THE AUTH PAGE ---
@@ -10,6 +12,15 @@ import { useApp } from "../context/AppContext";
  */
 export function AuthPage() {
   const navigate = useNavigate();
+  const resetTimeoutRef = useRef<any>(null);
+
+  useEffect(() => {
+    return () => {
+      if (resetTimeoutRef.current) {
+        clearTimeout(resetTimeoutRef.current);
+      }
+    };
+  }, []);
   
   // We pull our authentication "Powers" from the global AppContext
   const { login, signup, loginWithGoogle, isAuthenticated, authLoading } = useApp();
@@ -22,6 +33,7 @@ export function AuthPage() {
   const [showPassword, setShowPassword] = useState(false); // Controls the Eye icon
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
 
   // If the user somehow gets here while already logged in, send them home!
   useEffect(() => {
@@ -174,9 +186,43 @@ export function AuthPage() {
 
           {isLogin && (
             <div className="text-right">
-              <button type="button" className="text-[0.75rem] text-primary font-semibold hover:underline">
+              <button
+                type="button"
+                disabled={loading}
+                onClick={async () => {
+                  if (!email.trim()) {
+                    setError("Please enter your email address first");
+                    return;
+                  }
+                  // Early return if loading
+                  if (loading) return;
+
+                  setLoading(true);
+                  try {
+                    setError("");
+                    await sendPasswordResetEmail(auth, email.trim());
+                    setResetSent(true);
+                    if (resetTimeoutRef.current) {
+                      clearTimeout(resetTimeoutRef.current);
+                    }
+                    resetTimeoutRef.current = setTimeout(() => setResetSent(false), 5000);
+                  } catch (err: any) {
+                    // Use generic message to avoid leaking account existence
+                    console.error("Password reset error:", err);
+                    setError("If an account with that email exists, we've sent password reset instructions.");
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                className="text-[0.75rem] text-primary font-semibold hover:underline disabled:opacity-50"
+              >
                 Forgot password?
               </button>
+              {resetSent && (
+                <p className="text-[0.7rem] text-emerald-600 mt-1 font-medium animate-in fade-in">
+                  ✓ Password reset instructions sent
+                </p>
+              )}
             </div>
           )}
 

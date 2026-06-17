@@ -27,8 +27,7 @@ import { useApp } from "../context/AppContext";
 import { toast } from "sonner";
 import { EvSetupModal } from "./EvSetupModal";
 import { ProfileEditModal } from "./ProfileEditModal";
-
-declare var Razorpay: any;
+import { ensureRazorpayLoaded } from "../../lib/utils";
 
 /**
  * --- THE PROFILE PAGE ---
@@ -56,6 +55,9 @@ export function ProfilePage() {
     if (!user) return;
     setIsToppingUp(true);
     try {
+      // Ensure Razorpay SDK is loaded before proceeding
+      await ensureRazorpayLoaded();
+
       const razorpayKeyId = import.meta.env.VITE_RAZORPAY_KEY_ID;
       if (!razorpayKeyId) {
         throw new Error("Razorpay is not configured. Please add VITE_RAZORPAY_KEY_ID to your .env file.");
@@ -89,7 +91,7 @@ export function ProfilePage() {
         theme: { color: "#10b981" },
         modal: { ondismiss: function() { setIsToppingUp(false); } },
       };
-      const rzp = new Razorpay(options);
+      const rzp = new window.Razorpay(options);
       rzp.on('payment.failed', function (response: any) {
         toast.error(`Payment failed: ${response.error.description}`);
         setIsToppingUp(false);

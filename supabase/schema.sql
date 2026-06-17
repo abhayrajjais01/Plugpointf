@@ -79,8 +79,17 @@ CREATE TABLE IF NOT EXISTS public.bookings (
   connector_type TEXT,
   power NUMERIC(5,2),
   cashed_out BOOLEAN DEFAULT false,
+  payment_id TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Ensure payment_id column exists for backward compatibility
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS payment_id TEXT;
+
+-- Create unique index for payment_id (allowing NULL values)
+CREATE UNIQUE INDEX IF NOT EXISTS bookings_payment_id_unique
+ON public.bookings(payment_id)
+WHERE payment_id IS NOT NULL;
 
 -- Reviews
 CREATE TABLE IF NOT EXISTS public.reviews (
