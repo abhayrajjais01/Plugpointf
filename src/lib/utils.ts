@@ -5,13 +5,18 @@
 /**
  * Ensures that the Razorpay SDK script is loaded and window.Razorpay is available.
  */
-export function ensureRazorpayLoaded(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if ((window as any).Razorpay) {
-      resolve();
-      return;
-    }
+let razorpayLoadPromise: Promise<void> | null = null;
 
+export function ensureRazorpayLoaded(): Promise<void> {
+  if ((window as any).Razorpay) {
+    return Promise.resolve();
+  }
+
+  if (razorpayLoadPromise) {
+    return razorpayLoadPromise;
+  }
+
+  razorpayLoadPromise = new Promise<void>((resolve, reject) => {
     // Find the script tag in the DOM
     const script = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
     if (!script) {
@@ -20,7 +25,10 @@ export function ensureRazorpayLoaded(): Promise<void> {
       newScript.src = "https://checkout.razorpay.com/v1/checkout.js";
       newScript.async = true;
       newScript.onload = () => resolve();
-      newScript.onerror = () => reject(new Error("Failed to load Razorpay SDK"));
+      newScript.onerror = () => {
+        razorpayLoadPromise = null;
+        reject(new Error("Failed to load Razorpay SDK"));
+      };
       document.body.appendChild(newScript);
       return;
     }
@@ -36,6 +44,7 @@ export function ensureRazorpayLoaded(): Promise<void> {
     };
 
     const handleError = () => {
+      razorpayLoadPromise = null;
       if (interval) clearInterval(interval);
       reject(new Error("Failed to load Razorpay SDK"));
       script.removeEventListener("load", handleLoad);
@@ -53,9 +62,12 @@ export function ensureRazorpayLoaded(): Promise<void> {
         resolve();
       } else if (attempts > 50) { // 5 seconds timeout
         clearInterval(interval);
+        razorpayLoadPromise = null;
         reject(new Error("Timeout loading Razorpay SDK"));
       }
       attempts++;
     }, 100);
   });
+
+  return razorpayLoadPromise;
 }
