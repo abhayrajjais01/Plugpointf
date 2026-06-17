@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router";
 import { Zap, Mail, Lock, User, Eye, EyeOff, ArrowLeft } from "lucide-react";
 import { useApp } from "../context/AppContext";
@@ -12,6 +12,15 @@ import { auth } from "../../config/firebase";
  */
 export function AuthPage() {
   const navigate = useNavigate();
+  const resetTimeoutRef = useRef<any>(null);
+
+  useEffect(() => {
+    return () => {
+      if (resetTimeoutRef.current) {
+        clearTimeout(resetTimeoutRef.current);
+      }
+    };
+  }, []);
   
   // We pull our authentication "Powers" from the global AppContext
   const { login, signup, loginWithGoogle, isAuthenticated, authLoading } = useApp();
@@ -193,7 +202,10 @@ export function AuthPage() {
                     setError("");
                     await sendPasswordResetEmail(auth, email.trim());
                     setResetSent(true);
-                    setTimeout(() => setResetSent(false), 5000);
+                    if (resetTimeoutRef.current) {
+                      clearTimeout(resetTimeoutRef.current);
+                    }
+                    resetTimeoutRef.current = setTimeout(() => setResetSent(false), 5000);
                   } catch (err: any) {
                     // Use generic message to avoid leaking account existence
                     console.error("Password reset error:", err);
