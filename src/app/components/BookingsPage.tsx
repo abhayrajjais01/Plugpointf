@@ -301,12 +301,13 @@ export function BookingsPage() {
                   }
 
                   // Handle bookings that cross midnight
-                  if (end.getTime() <= start.getTime()) {
+                  const crossesMidnight = end.getTime() <= start.getTime();
+                  if (crossesMidnight) {
                     end.setDate(end.getDate() + 1);
                   }
 
-                  // Adjust now if needed (if now is before start, add a day)
-                  if (now.getTime() < start.getTime()) {
+                  // Adjust now if needed (only if booking crosses midnight and now has transitioned past midnight)
+                  if (crossesMidnight && now.getTime() < start.getTime()) {
                     now = new Date(now);
                     now.setDate(now.getDate() + 1);
                   }
