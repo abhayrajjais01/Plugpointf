@@ -248,29 +248,30 @@ export async function insertBooking(
     status: booking.status,
     connector_type: booking.connectorType,
     power: booking.power,
-    payment_id: paymentId || null,
   };
 
   // Use atomic upsert if paymentId is provided
   if (paymentId) {
+    // maybeSingle(): when the payment_id already exists, ignoreDuplicates skips the
+    // insert and returns zero rows. single() would treat that as an error.
     const { data, error } = await supabase
       .from("bookings")
-      .upsert(bookingData, { onConflict: "payment_id", ignoreDuplicates: true })
+      .upsert({ ...bookingData, payment_id: paymentId }, { onConflict: "payment_id", ignoreDuplicates: true })
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error("insertBooking (upsert):", error.message);
       return null;
     }
 
-    // Handle case where conflict caused skip (no row returned)
-    if (!data && !error) {
+    // Conflict caused the insert to be skipped: return the booking already saved for this payment
+    if (!data) {
       const { data: existingRow, error: queryError } = await supabase
         .from("bookings")
         .select("*")
         .eq("payment_id", paymentId)
-        .single();
+        .maybeSingle();
 
       if (queryError) {
         console.error("insertBooking (query existing):", queryError.message);
@@ -283,7 +284,8 @@ export async function insertBooking(
     return mapBooking(data);
   }
 
-  // Regular insert if no paymentId
+  // Regular insert if no paymentId (e.g. wallet). payment_id is left out entirely so
+  // this keeps working even before the payment_id column has been added to the database.
   const { data, error } = await supabase
     .from("bookings")
     .insert(bookingData)

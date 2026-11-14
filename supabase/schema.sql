@@ -86,10 +86,14 @@ CREATE TABLE IF NOT EXISTS public.bookings (
 -- Ensure payment_id column exists for backward compatibility
 ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS payment_id TEXT;
 
--- Create unique index for payment_id (allowing NULL values)
-CREATE UNIQUE INDEX IF NOT EXISTS bookings_payment_id_unique
-ON public.bookings(payment_id)
-WHERE payment_id IS NOT NULL;
+-- Unique index on payment_id so the same Razorpay payment can't create two bookings.
+-- It must NOT be a partial index (no WHERE clause): Supabase's upsert sends
+-- ON CONFLICT (payment_id) without a predicate, and Postgres can only match that
+-- against a full unique index. NULLs are still allowed many times, because Postgres
+-- treats NULLs as distinct, so wallet bookings (no payment_id) are unaffected.
+DROP INDEX IF EXISTS public.bookings_payment_id_unique;
+CREATE UNIQUE INDEX IF NOT EXISTS bookings_payment_id_key
+ON public.bookings(payment_id);
 
 -- Reviews
 CREATE TABLE IF NOT EXISTS public.reviews (
