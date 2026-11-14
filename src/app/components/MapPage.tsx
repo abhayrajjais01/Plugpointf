@@ -1,7 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router";
-import maplibregl from "maplibre-gl";
+// maplibre-gl v6 has no default export, so import everything as a namespace.
+import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+// v6 loads its background worker from a separate file next to its own script,
+// which Vite doesn't bundle. Import the worker as a URL and point MapLibre at it.
+import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
+
+maplibregl.setWorkerUrl(maplibreWorkerUrl);
 import {
   Zap,
   Star,
@@ -40,7 +46,8 @@ const MAP_CENTER: [number, number] = [77.63, 12.96]; // [longitude, latitude]
 
 // We use "MapLibre" to show the map, but we want it to look like Google Maps.
 // This configuration tells MapLibre to pull "tiles" (images of the world) from Google's servers.
-const GOOGLE_MAP_STYLE: maplibregl.StyleSpecification = {
+// v6 no longer re-exports the StyleSpecification type, so take it from the Map options.
+const GOOGLE_MAP_STYLE: Exclude<maplibregl.MapOptions["style"], string | undefined> = {
   version: 8,
   sources: {
     'google-roadmap': {
